@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="按百味楼点单和个人厨师档案计算过关阵容。">
+  <title>百味楼配队 · 爆炒江湖</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="archive.js" defer></script>
+  <script src="engine.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="container masthead-inner">
+      <p class="eyebrow">爆炒江湖</p>
+      <h1>百味楼配队</h1>
+      <p>录入本层点单，按你的厨师阵容计算过关方案。</p>
+    </div>
+  </header>
+  <main class="container">
+    <div class="workspace">
+      <section class="panel" aria-labelledby="stage-heading">
+        <h2 id="stage-heading">本层点单</h2>
+        <div class="stage-fields">
+          <label>目标分数<input id="target" type="number" inputmode="numeric" min="0" step="1" placeholder="按本层填写"></label>
+          <label>上阵人数上限<input id="slots" type="number" inputmode="numeric" min="1" step="1" value="3" required></label>
+          <p class="muted">按菜名导入本层点单。金额默认使用图鉴单价，可按活动售价或专精售价调整。</p>
+        </div>
+        <div class="dish-list" id="dishes"></div>
+        <datalist id="recipe-options"></datalist>
+        <button class="secondary" id="add-dish" type="button">添加菜谱</button>
+      </section>
+      <aside class="panel account" aria-labelledby="account-heading">
+        <h2 id="account-heading">我的档案</h2>
+        <p class="muted">在游戏内打开头像、设置、白菜菊花，复制校验码。</p>
+        <form id="archive-form">
+          <label for="token">游戏校验码</label>
+          <div class="import-line">
+            <input id="token" type="password" autocomplete="off" spellcheck="false">
+            <button class="secondary" type="submit" id="import-code" disabled>导入</button>
+          </div>
+        </form>
+        <button class="file-button" id="open-backup" type="button" disabled>从个人备份导入</button>
+        <input type="file" id="backup" accept=".json,.txt,application/json,text/plain" hidden>
+        <p id="archive-status" class="status" role="status">等待导入个人档案</p>
+        <p id="catalog-status" class="muted" role="status">正在加载图鉴</p>
+        <button class="file-button" id="open-catalog" type="button" hidden>选择图鉴数据文件</button>
+        <input type="file" id="catalog-file" accept=".json,application/json" hidden>
+        <details id="roster" hidden>
+          <summary>查看已导入的厨师</summary>
+          <ul id="roster-list"></ul>
+        </details>
+      </aside>
+    </div>
+    <details class="panel rules" id="rules">
+      <summary>计分参数</summary>
+      <p class="muted">先算基础售价，再叠加售价、金币与品级加成。各菜分数相加后四舍五入。</p>
+      <div class="rule-grid">
+        <label>达到目标分时<select id="target-mode"><option value="strict">必须超过目标分</option><option value="inclusive">等于目标分也算过关</option></select></label>
+        <label>搜索时限<select id="search-time"><option value="8000">8 秒</option><option value="60000">60 秒</option><option value="complete">完整遍历，可手动停止</option></select></label>
+      </div>
+    </details>
+    <section class="panel actions" aria-labelledby="result-heading">
+      <div class="section-top">
+        <div>
+          <h2 id="result-heading">阵容与计分</h2>
+          <p class="muted" id="solver-status" role="status">填写点单并导入个人档案后即可计算。</p>
+        </div>
+        <div class="search-controls">
+          <label>求解目标<select id="search-goal"><option value="pass">过线即可</option><option value="max">找更高分</option></select></label>
+          <button type="button" id="solve" class="primary" disabled>计算阵容</button>
+        </div>
+      </div>
+      <div id="result"></div>
+    </section>
+  </main>
+  <template id="dish-template">
+    <fieldset class="dish">
+      <legend></legend>
+      <div class="dish-fields">
+        <label>菜名<input name="recipe" type="text" list="recipe-options" placeholder="搜索图鉴菜名" autocomplete="off" required></label>
+        <label>计分金额<input name="amount" type="number" inputmode="numeric" min="0" step="1" required></label>
+        <button type="button" class="remove" aria-label="删除这道菜" title="删除这道菜">×</button>
+      </div>
+      <p class="dish-info muted" role="status"></p>
+    </fieldset>
+  </template>
+</body>
+</html>
