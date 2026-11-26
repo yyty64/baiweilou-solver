@@ -82,6 +82,11 @@ select { appearance: none; padding-right: 1.55rem; background-image: linear-grad
 .error { color: #8e2b22; }
 .status.error { background: #fcf0ed; border-left-color: var(--accent); }
 .account details { margin-top: .8rem; }
+.check-row { display: flex; align-items: center; gap: .45rem; margin-top: .8rem; }
+.check-row input { flex: none; width: 1.1rem; min-height: 0; height: 1.1rem; margin: 0; accent-color: var(--teal); }
+.equipment-fields { display: grid; gap: .55rem; }
+.equipment-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .7rem; }
+#equipment-editor > p:not(:empty) { margin-top: .4rem; }
 summary { cursor: pointer; color: var(--teal); font-weight: 650; }
 .account ul { max-height: 14rem; overflow: auto; display: grid; grid-template-columns: repeat(2, 1fr); padding: 0 0 0 1.3rem; gap: .15rem .9rem; }
 .rules, .actions { margin-top: 1rem; }
@@ -95,6 +100,7 @@ summary { cursor: pointer; color: var(--teal); font-weight: 650; }
 .result-summary strong { color: var(--teal); font-size: 1.25rem; }
 .result-team { display: grid; gap: .4rem; margin: .85rem 0; padding-left: 1.5rem; }
 .result-team small { margin-left: .6rem; color: var(--muted); font-size: .86rem; }
+.result-equipment { max-width: 24rem; margin-top: .25rem; }
 .numbers { display: flex; flex-wrap: wrap; gap: .45rem; margin: .8rem 0; }
 .numbers span { padding: .3rem .55rem; background: #eef3f0; border-radius: 4px; }
 .table-wrap { overflow: auto; margin-top: .75rem; }
