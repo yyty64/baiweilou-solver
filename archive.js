@@ -23,26 +23,33 @@
         const equipIds = new Set(catalog.equips.map((equip) => equip.equipId));
         const amberIds = new Set(catalog.ambers.map((amber) => amber.amberId));
         const chefs = new Map();
+        const equipped = new Map();
         const unknown = { chefs: new Set(), equips: new Set(), ambers: new Set() };
 
         for (const row of data.chefs) {
             const chefId = idOf(row?.id);
             if (!chefId || !hasStatus(row.got)) continue;
+            const equip = idOf(row.equip);
+            equipped.set(chefId, equip);
+            if (equip && !equipIds.has(equip)) unknown.equips.add(equip);
             if (!chefIds.has(chefId)) {
                 unknown.chefs.add(chefId);
                 continue;
             }
-            const equip = idOf(row.equip);
             const ambers = Array.isArray(row.ambers) ? row.ambers.map(idOf).filter(Boolean) : [];
-            if (equip && !equipIds.has(equip)) unknown.equips.add(equip);
             for (const amber of ambers) {
                 if (!amberIds.has(amber)) unknown.ambers.add(amber);
             }
             chefs.set(chefId, { chefId, ultimate: hasStatus(row.ult), equip, diskLevel: idOf(row.dlv), ambers });
         }
 
+        const equipmentStock = new Map();
+        for (const id of equipped.values()) {
+            if (equipIds.has(id)) equipmentStock.set(id, (equipmentStock.get(id) ?? 0) + 1);
+        }
         return {
             chefs: [...chefs.values()],
+            equipmentStock: [...equipmentStock],
             unknown: Object.fromEntries(Object.entries(unknown).map(([key, ids]) => [key, [...ids]])),
         };
     }

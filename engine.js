@@ -40,33 +40,43 @@
             });
         }
 
+        const equipmentCache = new Map();
+        function withEquipment(chef, id) {
+            if (chef.equipId === id) return chef;
+            if (!equipmentCache.has(id)) {
+                const equip = equips.get(id);
+                equipmentCache.set(id, {
+                    equipId: id, equipName: equip?.name,
+                    equipment: effects(equip?.skill ?? [], "equipment", equip?.name),
+                });
+            }
+            return { ...chef, ...equipmentCache.get(id) };
+        }
+
         const catalogChefs = indexBy(catalog.chefs, "chefId");
         const chefs = archive.chefs.map((personal) => {
             const chef = catalogChefs.get(personal.chefId);
-            const equip = equips.get(personal.equip);
             const jade = personal.ambers.map((id) => ambers.get(id)).filter(Boolean);
             const counts = new Map();
             for (const amber of jade) if (amber.amberSuitId) counts.set(amber.amberSuitId, (counts.get(amber.amberSuitId) ?? 0) + 1);
             const activeSuits = [...counts].map(([id, count]) => ({ suit: suits.get(id), count }))
                 .filter(({ suit, count }) => suit && count >= suit.requireNum);
-            return {
+            return withEquipment({
                 id: chef.chefId,
                 baseId: chef.baseChefId,
                 name: chef.name,
                 tags: chef.tags ?? [],
                 base: tech.map((key) => Number(chef[key.toLowerCase()]) || 0),
-                equipName: equip?.name,
                 jadeNames: jade.map((row) => row.name),
                 level: personal.diskLevel ?? 1,
                 maxLevel: disks.get(chef.disk)?.maxLevel ?? 1,
-                unknownGear: Boolean(personal.equip && !equip) || personal.ambers.length !== jade.length,
+                unknownJade: personal.ambers.length !== jade.length,
                 innate: effects(chef.skill, "innate", chef.name),
                 ultimate: personal.ultimate ? effects(chef.ultimateSkillList, "ultimate", chef.name) : [],
-                equipment: effects(equip?.skill ?? [], "equipment", equip?.name),
                 jade: jade.flatMap((amber) => effects(amber.skill, "jade", amber.name)
                     .map((effect) => ({ ...effect, amplification: amber.amplification || 0 }))),
                 suit: activeSuits.flatMap(({ suit }) => effects(suit.skill, "suit", suit.name)),
-            };
+            }, personal.equip ?? null);
         });
         const ownedBase = new Set(chefs.map((chef) => chef.baseId));
         const global = chefs.flatMap((chef) => chef.ultimate.filter((effect) => effect.condition === "Global"))
@@ -194,6 +204,23 @@
             }
         }
 
+        const topGrades = dishes.map(() => thresholds.length - 1);
+        function relevant(effect) {
+            if (skillIndexes.has(tech.indexOf(effect.type))) return true;
+            if (effect.type === "AmberDiskLevel" || effect.type === "MutiEquipmentSkill") return true;
+            if (!isPrice(effect.type)) return false;
+            const notes = new Set();
+            return dishes.some((dish) => priceMatch(effect, dish, topGrades[0], topGrades, notes) || notes.size);
+        }
+
+        function equipmentChoices(ids) {
+            const choices = [null];
+            for (const id of ids) {
+                if (withEquipment({}, id).equipment.some(relevant)) choices.push(id);
+            }
+            return choices;
+        }
+
         function score(team) {
             const effectsByChef = teamEffects(team);
             const allEffects = effectsByChef.flatMap((list, position) => list.map((effect) => ({ effect, position })));
@@ -279,37 +306,199 @@
                 if (chef.jade.length && chef.level > chef.maxLevel) notes.add(`${chef.name}的心法盘等级超出图鉴范围`);
             }
             if (missingChefData) notes.add("部分已拥有厨师未在图鉴收录，无法核对基修");
-            for (const chef of team) if (chef.unknownGear) notes.add(`${chef.name}有图鉴未收录的装备`);
+            for (const chef of team) {
+                if (chef.unknownJade || (chef.equipId && !equips.has(chef.equipId))) notes.add(`${chef.name}有图鉴未收录的装备`);
+            }
             return {
                 score: roundHalfUp(epsilon(totalScore)),
-                team: team.map(({ id, name, equipName, jadeNames }) => ({ id, name, equipName, jadeNames })),
+                team: team.map(({ id, name, equipId, equipName, jadeNames }) => ({ id, name, equipId, equipName, jadeNames })),
                 skills: cleanTotal, passive, dishes: breakdown, notes: [...notes],
             };
         }
 
-        return { chefs, score, skillIndexes };
+        return { chefs, score, skillIndexes, withEquipment, equipmentChoices, relevant };
+    }
+
+    function compareResults(a, b) {
+        return Number(!a.notes.length) - Number(!b.notes.length) || a.score - b.score;
+    }
+
+    function createEquipmentSearch(evaluator, rules, exact, deadline) {
+        const { withEquipment, score, equipmentChoices, relevant } = evaluator;
+        const stock = new Map(rules.equipmentStock);
+        const locks = new Map(rules.equipmentLocks);
+        const choices = equipmentChoices(stock.keys());
+        const hasNext = choices.some((id) => withEquipment({}, id).equipment.some((effect) =>
+            effect.condition === "Next" && relevant(effect)));
+        let evaluated = 0;
+
+        function changeCount(counts, id, change) {
+            if (id !== null) counts.set(id, (counts.get(id) ?? 0) + change);
+        }
+
+        function baseline(team) {
+            if (!locks.size) return team;
+            const remaining = new Map();
+            for (const chef of team) if (locks.has(chef.id)) changeCount(remaining, locks.get(chef.id), -1);
+            return team.map((chef) => {
+                if (locks.has(chef.id)) return withEquipment(chef, locks.get(chef.id));
+                const id = chef.equipId;
+                if (!stock.has(id)) return chef;
+                if ((remaining.get(id) ?? 0) + stock.get(id) <= 0) return withEquipment(chef, null);
+                changeCount(remaining, id, -1);
+                return chef;
+            });
+        }
+
+        function techniqueProgress(result) {
+            return result.dishes.reduce((sum, dish) => sum + dish.amount * Math.max(0, Math.min(
+                thresholds.at(-1), ...dish.requirements.map(({ totalSkill, requiredSkill }) => totalSkill / requiredSkill),
+            )), 0);
+        }
+
+        function optimize(team, original, limit = deadline) {
+            const seats = team.map((chef, index) => locks.has(chef.id) ? -1 : index).filter((index) => index >= 0);
+            const used = new Map();
+            for (const chef of team) changeCount(used, chef.equipId, 1);
+            const available = (id) => id === null || (used.get(id) ?? 0) < stock.get(id);
+            const candidate = [...team];
+            let best = original;
+            let bestProgress = techniqueProgress(best);
+            let bestTeam = team;
+            const canContinue = () => Date.now() < limit;
+
+            function inspect() {
+                const result = score(candidate);
+                evaluated++;
+                const comparison = compareResults(result, best);
+                if (comparison < 0) return;
+                const progress = techniqueProgress(result);
+                if (!comparison && progress <= bestProgress) return;
+                best = result;
+                bestProgress = progress;
+                bestTeam = [...candidate];
+            }
+
+            function assign(index) {
+                if (index === seats.length) {
+                    inspect();
+                    return;
+                }
+                const position = seats[index];
+                for (const id of choices) {
+                    if (!canContinue()) return;
+                    if (!available(id)) continue;
+                    candidate[position] = withEquipment(team[position], id);
+                    changeCount(used, id, 1);
+                    assign(index + 1);
+                    changeCount(used, id, -1);
+                }
+            }
+
+            if (exact) {
+                for (const position of seats) changeCount(used, team[position].equipId, -1);
+                if (seats.length) assign(0);
+                return best;
+            }
+
+            // Revisit each slot after changes to the team's techniques and price bonuses.
+            for (let round = 0; round < 2 && canContinue(); round++) {
+                const before = bestTeam;
+                for (const position of seats) {
+                    if (!canContinue()) break;
+                    const current = bestTeam;
+                    const old = current[position];
+                    for (const id of choices) {
+                        if (!canContinue()) break;
+                        if (id === old.equipId) continue;
+                        candidate.splice(0, candidate.length, ...current);
+                        candidate[position] = withEquipment(old, id);
+                        if (available(id)) {
+                            inspect();
+                        } else {
+                            for (const other of seats) {
+                                if (current[other].equipId !== id) continue;
+                                candidate[other] = withEquipment(current[other], old.equipId);
+                                inspect();
+                                if (old.equipId !== null) {
+                                    candidate[other] = withEquipment(current[other], null);
+                                    inspect();
+                                }
+                                candidate[other] = current[other];
+                            }
+                        }
+                    }
+                    if (current !== bestTeam) {
+                        used.clear();
+                        for (const chef of bestTeam) changeCount(used, chef.equipId, 1);
+                    }
+                }
+                if (before === bestTeam) break;
+            }
+            return best;
+        }
+
+        return { baseline, optimize, hasNext, locks, get evaluated() { return evaluated; } };
     }
 
     function solve(catalog, archive, stage, rules, progress = () => {}) {
         if (!Number.isSafeInteger(stage.slots) || stage.slots < 1) {
             throw new Error("上阵人数上限需为正整数。");
         }
-        const { chefs, score, skillIndexes } = createEvaluator(catalog, archive, stage, rules);
+        const evaluator = createEvaluator(catalog, archive, stage, rules);
+        const { chefs, score, skillIndexes } = evaluator;
         const maxSlots = Math.min(stage.slots, chefs.length);
         const budget = rules.searchMs ?? 5000;
-        const deadline = Date.now() + budget;
+        const start = Date.now();
+        const deadline = start + budget;
+        const automatic = Array.isArray(rules.equipmentStock);
+        const stockSize = rules.equipmentStock?.length ?? 0;
+        // Bound joint enumeration by counting ordered teams and possible assignments.
+        let estimate = 0, combinations = 1;
+        for (let size = 1; size <= maxSlots && estimate <= 15000; size++) {
+            combinations *= (chefs.length - size + 1) * (stockSize + 1);
+            estimate += combinations;
+        }
+        const exactEquipment = automatic && (!stockSize || estimate <= 15000);
+        const equipment = automatic ? createEquipmentSearch(evaluator, rules, exactEquipment, deadline) : null;
+        const shortlist = [];
+        const refined = new Set();
+        const lineupDeadline = automatic && !exactEquipment ? start + budget * 0.65 : deadline;
         const compareTarget = (value) => rules.targetMode === "strict" ? value > stage.target : value >= stage.target;
-        let evaluated = 0, best = null, bestWithNotes = null, timedOut = false;
-        const stop = () => rules.goal === "pass" && best && compareTarget(best.score);
+        let evaluated = 0, best = null, bestWithNotes = null, lineupLimited = false;
+        const stop = () => rules.goal === "pass" && best && compareTarget(best.score) &&
+            (!automatic || exactEquipment || refined.size > 0);
         function searchStopped() {
             if (stop()) return true;
-            timedOut ||= Date.now() >= deadline;
-            return timedOut;
+            lineupLimited ||= Date.now() >= lineupDeadline;
+            return lineupLimited;
+        }
+
+        function consider(result) {
+            if (result.notes.length) {
+                if (!bestWithNotes || result.score > bestWithNotes.score) bestWithNotes = result;
+            } else if (!best || result.score > best.score) {
+                best = result;
+            }
+        }
+
+        function refine(count, limit) {
+            for (const { team, result } of shortlist) {
+                if (!count || Date.now() >= limit) break;
+                if (refined.has(team)) continue;
+                refined.add(team);
+                count--;
+                consider(equipment.optimize(team, result, limit));
+                if (stop()) break;
+            }
         }
         const seeded = new Set();
-        const needsNext = new Set(chefs.filter((chef) => [...chef.innate, ...chef.ultimate, ...chef.equipment, ...chef.jade, ...chef.suit]
-            .some((effect) => effect.condition === "Next" &&
-                (tech.includes(effect.type) || isPrice(effect.type) || effect.type === "AmberDiskLevel" || effect.type === "MutiEquipmentSkill"))));
+        const needsNext = new Set(chefs.filter((chef) => {
+            if (equipment?.hasNext && !equipment.locks.has(chef.id)) return true;
+            const configured = equipment?.locks.has(chef.id) ? evaluator.withEquipment(chef, equipment.locks.get(chef.id)) : chef;
+            return [...chef.innate, ...chef.ultimate, ...configured.equipment, ...chef.jade, ...chef.suit]
+                .some((effect) => effect.condition === "Next" && evaluator.relevant(effect));
+        }));
         function inspect(team, remember = true) {
             const ids = team.map((chef) => chef.id).sort((a, b) => a - b);
             const edges = team.slice(0, -1).flatMap((chef, index) =>
@@ -317,10 +506,17 @@
             const key = `${ids.join(",")}|${edges.join(",")}`;
             if (seeded.has(key)) return null;
             if (remember) seeded.add(key);
-            const result = score(team);
+            const fitted = equipment ? equipment.baseline(team) : team;
+            const baseline = score(fitted);
+            const result = exactEquipment && Date.now() < deadline ? equipment.optimize(fitted, baseline) : baseline;
             evaluated++;
-            if (result.notes.length && (!bestWithNotes || result.score > bestWithNotes.score)) bestWithNotes = result;
-            if (!result.notes.length && (!best || result.score > best.score)) best = result;
+            consider(result);
+            if (automatic && !exactEquipment) {
+                const position = shortlist.findIndex((entry) => compareResults(result, entry.result) > 0);
+                if (position >= 0) shortlist.splice(position, 0, { team: fitted, result });
+                else if (shortlist.length < 16) shortlist.push({ team: fitted, result });
+                if (shortlist.length > 16) shortlist.pop();
+            }
             if (evaluated % 1000 === 0) progress(evaluated);
             const coverage = result.dishes.reduce((sum, dish) => sum + Math.min(1,
                 ...dish.requirements.map(({ totalSkill, requiredSkill }) => totalSkill / requiredSkill)), 0);
@@ -336,7 +532,7 @@
             }
         }
         let frontier = ranking.slice(0, 10).map(({ chef, ...value }) => ({ team: [chef], ...value }));
-        const seedDeadline = Math.min(deadline, Date.now() + Math.max(200, Math.min(budget / 3, 3000)));
+        const seedDeadline = Math.min(lineupDeadline, Date.now() + Math.max(200, Math.min(budget / 3, 3000)));
         for (let size = 2; size <= maxSlots && !stop(); size++) {
             const next = [];
             seedSearch:
@@ -355,6 +551,9 @@
             }
             frontier = next.sort(compare).slice(0, 10);
             if (Date.now() >= seedDeadline) break;
+        }
+        if (automatic && !exactEquipment && rules.goal === "pass") {
+            refine(4, Math.min(lineupDeadline, Date.now() + Math.min(budget / 5, 1600)));
         }
 
         // Continue over the entire candidate space when time permits.
@@ -404,22 +603,26 @@
             assign(0, null);
         }
         function visit(team, start) {
-            if (stop() || timedOut || team.length >= maxSlots) return;
+            if (stop() || lineupLimited || team.length >= maxSlots) return;
             for (let index = start; index < ordered.length; index++) {
                 if (searchStopped()) return;
                 const chef = ordered[index];
                 const group = [...team, chef];
                 if (group.length > 1) inspectOrders(group);
                 visit(group, index + 1);
-                if (stop() || timedOut) return;
+                if (stop() || lineupLimited) return;
             }
         }
         if (maxSlots > 1) visit([], 0);
+        if (automatic && !exactEquipment && !stop()) refine(shortlist.length, deadline);
         const found = best ?? bestWithNotes;
+        const timedOut = Date.now() >= deadline;
         return {
             best: found, passed: Boolean(best && compareTarget(best.score)), evaluated,
-            complete: !stop() && !timedOut && !bestWithNotes, timedOut,
+            complete: !stop() && !lineupLimited && !timedOut && !bestWithNotes && (!automatic || exactEquipment), timedOut,
             excluded: Boolean(bestWithNotes),
+            equipmentEvaluated: equipment?.evaluated,
+            approximateEquipment: automatic && !exactEquipment,
         };
     }
 

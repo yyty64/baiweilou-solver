@@ -184,21 +184,39 @@ function readEquipment(input, currentId) {
     throw new Error(`图鉴中找不到「${name}」，请选择厨具或留空。`);
 }
 
-function setEquipment(chef, id, overrides = equipmentOverrides) {
-    if (id === chef.equip) overrides.delete(chef.chefId);
-    else overrides.set(chef.chefId, id);
+function availableEquipment(added = equipmentOverrides) {
+    const stock = new Map(archive.equipmentStock);
+    if ($("equipment-source").value === "catalog") {
+        for (const id of equipmentNames.keys()) if (!stock.has(id)) stock.set(id, 1);
+    }
+    for (const id of added.values()) {
+        if (equipmentNames.has(id) && !stock.has(id)) stock.set(id, 1);
+    }
+    return stock;
 }
 
-function configuredArchive(overrides = equipmentOverrides) {
-    const useEquipment = $("use-equipment").checked;
-    return {
-        ...archive,
-        chefs: archive.chefs.map((chef) => ({ ...chef, equip: useEquipment ? equippedId(chef, overrides) : null })),
-    };
+function validateEquipment(assignments, stock) {
+    const counts = new Map();
+    for (const id of assignments.values()) {
+        if (!stock.has(id)) continue;
+        const count = (counts.get(id) ?? 0) + 1;
+        if (count > stock.get(id)) throw new Error(`「${equipmentLabel(id)}」可用 ${stock.get(id)} 件，请调整搭配。`);
+        counts.set(id, count);
+    }
 }
 
 function refreshEquipmentEditor() {
-    $("equipment-editor").hidden = !$("use-equipment").checked || !archive?.chefs.length;
+    const enabled = $("use-equipment").checked && !!archive?.chefs.length;
+    $("equipment-source-panel").hidden = !enabled;
+    $("equipment-editor").hidden = !enabled;
+    if (enabled) {
+        const stock = availableEquipment();
+        const count = [...stock.values()].reduce((total, quantity) => total + quantity, 0);
+        $("equipment-source-info").textContent = $("equipment-source").value === "catalog"
+            ? `从图鉴模拟 ${numberFormat.format(count)} 件厨具，每种至少一件。`
+            : count ? `可调配 ${numberFormat.format(count)} 件厨具，来自档案中的已绑定厨具及手动补入的厨具。`
+                : "档案中没有可调配的厨具。可改选全图鉴模拟，或手动补入厨具。";
+    }
     const name = $("equipment-chef").value.trim();
     const chef = ownedChefsByName.get(name);
     $("equipment-item").disabled = !chef;
@@ -206,7 +224,7 @@ function refreshEquipmentEditor() {
     $("restore-equipment").disabled = !chef || !equipmentOverrides.has(chef.chefId);
     $("equipment-item").value = chef ? equipmentLabel(equippedId(chef)) : "";
     if (name && !chef) status("equipment-status", "请选择已导入的厨师。", true);
-    else status("equipment-status", equipmentOverrides.size ? `已调整 ${equipmentOverrides.size} 位厨师的厨具` : "");
+    else status("equipment-status", equipmentOverrides.size ? `已固定 ${equipmentOverrides.size} 位厨师的厨具` : "");
 }
 
 function readInteger(input, label, minimum) {
@@ -243,6 +261,10 @@ function readRules() {
     return {
         goal: $("search-goal").value,
         targetMode: $("target-mode").value, searchMs: time === "complete" ? Infinity : Number(time),
+        ...($("use-equipment").checked && {
+            equipmentStock: [...availableEquipment()],
+            equipmentLocks: [...equipmentOverrides],
+        }),
     };
 }
 
@@ -254,17 +276,16 @@ function renderLineup(best, stage, rules, originalScore) {
         const item = node("li", chef.name);
         if (chef.jadeNames.length) item.append(node("small", chef.jadeNames.join(" · ")));
         if (editable) {
-            const personal = archive.chefs.find(({ chefId }) => chefId === chef.id);
             const label = node("label", "厨具", "result-equipment");
             const input = node("input");
             input.setAttribute("list", "equipment-options");
             input.setAttribute("aria-label", `${chef.name}的厨具`);
             input.autocomplete = "off";
             input.placeholder = "搜索厨具，留空代表卸下";
-            input.value = equipmentLabel(equippedId(personal));
+            input.value = equipmentLabel(chef.equipId);
             label.append(input);
             item.append(label);
-            fields.push({ personal, input });
+            fields.push({ chef, input });
         }
         team.append(item);
     }
@@ -280,15 +301,11 @@ function renderLineup(best, stage, rules, originalScore) {
     form.addEventListener("submit", (event) => {
         event.preventDefault();
         try {
-            const overrides = new Map(equipmentOverrides);
-            for (const { personal, input } of fields) {
-                setEquipment(personal, readEquipment(input, equippedId(personal)), overrides);
-            }
-            const { chefs, score } = BaiweiEngine.createEvaluator(catalog, configuredArchive(overrides), stage, rules);
+            const equipment = new Map(fields.map(({ chef, input }) => [chef.id, readEquipment(input, chef.equipId)]));
+            validateEquipment(equipment, availableEquipment(equipment));
+            const { chefs, score, withEquipment } = BaiweiEngine.createEvaluator(catalog, archive, stage, rules);
             const byId = new Map(chefs.map((chef) => [chef.id, chef]));
-            const adjusted = score(best.team.map(({ id }) => byId.get(id)));
-            equipmentOverrides = overrides;
-            refreshEquipmentEditor();
+            const adjusted = score(best.team.map(({ id }) => withEquipment(byId.get(id), equipment.get(id))));
             renderResult({ best: adjusted }, stage, rules, originalScore);
         } catch (error) {
             message.textContent = error.message;
@@ -307,6 +324,8 @@ function renderResult(result, stage, rules, originalScore = null) {
         if (excluded) detail.push("有阵容存在待核对的计分项");
         if (complete) detail.push("已遍历全部可选阵容");
         detail.push(`已计算 ${numberFormat.format(evaluated)} 组`);
+        if (result.equipmentEvaluated) detail.push(`已比较 ${numberFormat.format(result.equipmentEvaluated)} 种厨具搭配`);
+        if (result.approximateEquipment) detail.push("厨具为搜索到的较优搭配");
         status("solver-status", detail.join(" · "));
     } else {
         status("solver-status", "已按原阵容和站位复算。");
@@ -376,10 +395,12 @@ function runSolver() {
     try {
         const stage = readStage();
         const rules = readRules();
-        const selectedArchive = configuredArchive();
+        const selectedArchive = $("use-equipment").checked ? archive : {
+            ...archive, chefs: archive.chefs.map((chef) => ({ ...chef, equip: null })),
+        };
         $("result").replaceChildren();
         $("solve").textContent = "停止搜索";
-        status("solver-status", "正在计算厨师阵容…");
+        status("solver-status", $("use-equipment").checked ? "正在搜索阵容和厨具搭配…" : "正在计算厨师阵容…");
         if (location.protocol === "file:") {
             offlineRun = setTimeout(() => {
                 updateResultState();
@@ -394,7 +415,8 @@ function runSolver() {
         worker = new Worker("./worker.js");
         worker.onmessage = ({ data }) => {
             if (data.evaluated) {
-                status("solver-status", `已计算 ${numberFormat.format(data.evaluated)} 组阵容…`);
+                const gear = rules.equipmentStock ? "，正在搜索厨具搭配" : "";
+                status("solver-status", `已计算 ${numberFormat.format(data.evaluated)} 组阵容${gear}…`);
                 return;
             }
             updateResultState();
@@ -459,6 +481,10 @@ $("use-equipment").addEventListener("change", () => {
     refreshEquipmentEditor();
     updateResultState();
 });
+$("equipment-source").addEventListener("change", () => {
+    refreshEquipmentEditor();
+    updateResultState();
+});
 $("equipment-chef").addEventListener("input", refreshEquipmentEditor);
 $("equipment-form").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -466,10 +492,12 @@ $("equipment-form").addEventListener("submit", (event) => {
     if (!chef || !$("use-equipment").checked) return;
     try {
         const id = readEquipment($("equipment-item"), equippedId(chef));
-        setEquipment(chef, id);
+        const locks = new Map(equipmentOverrides).set(chef.chefId, id);
+        validateEquipment(locks, availableEquipment(locks));
+        equipmentOverrides = locks;
         refreshEquipmentEditor();
         updateResultState();
-        status("equipment-status", `已保存「${chefNames.get(chef.chefId)}」的厨具配置`);
+        status("equipment-status", `已固定「${chefNames.get(chef.chefId)}」的厨具配置`);
     } catch (error) {
         status("equipment-status", error.message, true);
     }
@@ -479,7 +507,7 @@ $("restore-equipment").addEventListener("click", () => {
     if (!chef || !equipmentOverrides.delete(chef.chefId)) return;
     refreshEquipmentEditor();
     updateResultState();
-    status("equipment-status", `已恢复「${chefNames.get(chef.chefId)}」的档案配置`);
+    status("equipment-status", `「${chefNames.get(chef.chefId)}」已恢复自动搭配`);
 });
 
 $("add-dish").addEventListener("click", () => addDish(true));

@@ -48,15 +48,19 @@
         <button class="file-button" id="open-catalog" type="button" hidden>选择图鉴数据文件</button>
         <input type="file" id="catalog-file" accept=".json,application/json" hidden>
         <label class="check-row"><input id="use-equipment" type="checkbox" checked>使用厨具</label>
+        <div id="equipment-source-panel" hidden>
+          <label>自动搭配范围<select id="equipment-source"><option value="archive">档案厨具</option><option value="catalog">全图鉴（模拟）</option></select></label>
+          <p id="equipment-source-info" class="muted"></p>
+        </div>
         <details id="equipment-editor" hidden>
-          <summary>调整厨具配置</summary>
-          <p class="muted">可以用图鉴中的厨具模拟搭配，留空代表卸下。</p>
+          <summary>固定个别厨师的厨具</summary>
+          <p class="muted">该厨师上阵时使用指定厨具，留空可固定为空。可从图鉴补入档案里没有的厨具。</p>
           <form class="equipment-fields" id="equipment-form">
             <label>厨师<input id="equipment-chef" type="text" list="equipment-chef-options" placeholder="输入已拥有的厨师名" autocomplete="off" required></label>
             <label>厨具<input id="equipment-item" type="text" list="equipment-options" placeholder="搜索图鉴厨具" autocomplete="off" disabled></label>
             <div class="equipment-buttons">
-              <button class="secondary" id="save-equipment" type="submit" disabled>保存配置</button>
-              <button class="file-button" id="restore-equipment" type="button" disabled>恢复此厨师的档案配置</button>
+              <button class="secondary" id="save-equipment" type="submit" disabled>固定配置</button>
+              <button class="file-button" id="restore-equipment" type="button" disabled>恢复自动搭配</button>
             </div>
           </form>
           <p class="muted" id="equipment-status" role="status"></p>
