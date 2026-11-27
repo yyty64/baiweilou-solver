@@ -6,6 +6,15 @@ const flavors = ["Sour", "Sweet", "Bitter", "Spicy", "Salty", "Tasty"];
 const flavorLabels = ["酸", "甜", "苦", "辣", "咸", "鲜"];
 const $ = (id) => document.getElementById(id);
 const numberFormat = new Intl.NumberFormat("zh-CN");
+const stagePresets = [
+    { slots: 3, dishes: ["香菇青菜", "扬州炒饭", "地三鲜", "回锅肉", "海鲜面"] },
+    { slots: 4, dishes: ["鸡肉蔬菜沙拉", "蟹壳黄", "酒香草头", "面茶", "蛤蜊蒸蛋", "串烤盐焗虾"] },
+    { slots: 4, dishes: ["冰淇淋鸡蛋仔", "芋泥香酥鸭", "珍珠丸子", "八宝辣酱", "青椒塞肉", "泡鲁达"] },
+    { slots: 4, dishes: ["青团", "藕粉栗子羹", "金针菇牛肉卷", "辣白菜火锅", "儿童餐", "清凉一夏", "千层牛肉卷"] },
+    { slots: 4, dishes: ["黄油啤酒", "山家三脆", "莜面鱼鱼", "莜面卷", "不言药水", "素丸子", "豌豆樱桃萝", "奇迹彗星炒饭", "打抛猪肉"] },
+    { slots: 4, dishes: ["青柠金汤翅捞饭", "幽灵咖喱", "熊猫戏竹", "雪菜黄鱼面", "平遥牛肉", "玉书牛肉", "番茄罗勒汤"] },
+    { slots: 5, dishes: ["蒜蓉芝士焗龙虾", "五圆鸡", "儿童牛排", "烛光晚餐", "港式早茶", "美乐蒂下午茶"] },
+];
 
 let catalog;
 let archive;
@@ -127,9 +136,10 @@ function updateDishRecipe(row, refreshDefaults = false) {
     const info = row.querySelector(".dish-info");
     const name = input.value.trim();
     const recipe = recipesByName.get(name);
+    const preset = Boolean($("stage-preset").value);
     input.disabled = !catalog;
     amount.disabled = !recipe;
-    specialized.disabled = !recipe;
+    specialized.disabled = preset || !recipe;
     if (!recipe) {
         delete row.dataset.recipe;
         amount.value = "";
@@ -142,8 +152,9 @@ function updateDishRecipe(row, refreshDefaults = false) {
         row.dataset.recipe = name;
         delete row.dataset.manualSpecialization;
         delete row.dataset.manualAmount;
+        if (preset) amount.value = "";
     }
-    if (refreshDefaults || changed) {
+    if (!preset && (refreshDefaults || changed)) {
         if (!row.dataset.manualSpecialization) specialized.checked = archive?.specializedRecipes.has(recipe.id) ?? false;
         if (!row.dataset.manualAmount) amount.value = dishPrice(recipe, specialized.checked);
     }
@@ -153,7 +164,7 @@ function updateDishRecipe(row, refreshDefaults = false) {
     info.textContent = [`${recipe.rarity} 火`, flavor, ...skills, ...recipe.ingredients].join(" · ");
 }
 
-function addDish(focus = false) {
+function createDishRow(recipeName = "") {
     const row = $("dish-template").content.firstElementChild.cloneNode(true);
     row.querySelector(".remove").addEventListener("click", () => {
         row.remove();
@@ -163,6 +174,11 @@ function addDish(focus = false) {
     const recipeInput = row.querySelector('[name="recipe"]');
     const amount = row.querySelector('[name="amount"]');
     const specialized = row.querySelector('[name="specialized"]');
+    recipeInput.value = recipeName;
+    if ($("stage-preset").value) {
+        row.querySelector(".dish-specialization").hidden = true;
+        amount.placeholder = "手填金额";
+    }
     recipeInput.addEventListener("input", () => updateDishRecipe(row));
     recipeInput.addEventListener("change", () => updateDishRecipe(row));
     amount.addEventListener("input", () => { row.dataset.manualAmount = "true"; });
@@ -173,11 +189,24 @@ function addDish(focus = false) {
         delete row.dataset.manualAmount;
         amount.value = dishPrice(recipe, specialized.checked);
     });
-    $("dishes").append(row);
     updateDishRecipe(row);
+    return row;
+}
+
+function addDish(focus = false) {
+    const row = createDishRow();
+    $("dishes").append(row);
     refreshDishLabels();
     updateResultState();
-    if (focus) recipeInput.focus();
+    if (focus) row.querySelector('[name="recipe"]').focus();
+}
+
+function loadStagePreset() {
+    const preset = stagePresets[Number($("stage-preset").value) - 1];
+    $("slots").value = preset?.slots ?? $("slots").defaultValue;
+    $("dishes").replaceChildren(...(preset?.dishes ?? [""]).map(createDishRow));
+    refreshDishLabels();
+    updateResultState();
 }
 
 function useArchive(data) {
@@ -663,6 +692,7 @@ $("restore-equipment").addEventListener("click", () => {
 });
 
 $("add-dish").addEventListener("click", () => addDish(true));
+$("stage-preset").addEventListener("change", loadStagePreset);
 $("dishes").addEventListener("input", updateResultState);
 $("target").addEventListener("input", updateResultState);
 $("slots").addEventListener("input", updateResultState);

@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="按百味楼点单和个人厨师档案计算过关阵容。">
   <title>百味楼配队 · 爆炒江湖</title>
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=4">
   <script src="archive.js?v=2" defer></script>
   <script src="engine.js" defer></script>
-  <script src="app.js?v=4" defer></script>
+  <script src="app.js?v=5" defer></script>
 </head>
 <body>
   <header class="masthead">
@@ -23,9 +23,21 @@
       <section class="panel" aria-labelledby="stage-heading">
         <h2 id="stage-heading">本层点单</h2>
         <div class="stage-fields">
+          <label class="stage-preset">关卡预设
+            <select id="stage-preset" aria-describedby="stage-help">
+              <option value="">手动填写</option>
+              <option value="1">第 1 关</option>
+              <option value="2">第 2 关</option>
+              <option value="3">第 3 关</option>
+              <option value="4">第 4 关</option>
+              <option value="5">第 5 关</option>
+              <option value="6">第 6 关</option>
+              <option value="7">第 7 关</option>
+            </select>
+          </label>
           <label>目标分数<input id="target" type="number" inputmode="numeric" min="0" step="1" placeholder="按本层填写"></label>
           <label>上阵人数上限<input id="slots" type="number" inputmode="numeric" min="1" step="1" value="3" required></label>
-          <p class="muted">按菜名添加点单。导入档案后会按专精状态填价，也可逐道切换或手动修改计分金额。</p>
+          <p class="muted" id="stage-help">切换关卡会替换当前点单。使用预设时请手填计分金额。手动填写模式支持按档案专精状态填价。</p>
         </div>
         <div class="dish-list" id="dishes"></div>
         <datalist id="recipe-options"></datalist>

@@ -61,6 +61,7 @@ input::placeholder { color: #647573; }
 select { appearance: none; padding-right: 1.55rem; background-image: linear-gradient(45deg, transparent 48%, #526c66 51%), linear-gradient(135deg, #526c66 49%, transparent 52%); background-size: .31rem .31rem; background-position: right .83rem center, right .52rem center; background-repeat: no-repeat; }
 .stage-fields { display: grid; gap: .65rem .85rem; grid-template-columns: repeat(2, minmax(0, 10rem)); align-items: end; margin-bottom: 1.15rem; }
 .stage-fields > p { grid-column: 1 / -1; }
+.stage-preset { grid-column: 1 / -1; }
 .dish-list { display: grid; gap: .8rem; margin-bottom: .9rem; }
 .dish { min-width: 0; margin: 0; padding: .65rem .75rem .75rem; border: 1px solid var(--line); border-radius: 8px; background: #fafbf9; }
 .dish legend { color: var(--teal); font-size: .92rem; font-weight: 700; padding: 0 .25rem; }
