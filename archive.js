@@ -47,9 +47,15 @@
         for (const id of equipped.values()) {
             if (equipIds.has(id)) equipmentStock.set(id, (equipmentStock.get(id) ?? 0) + 1);
         }
+        const specializedRecipes = new Set();
+        for (const recipe of Array.isArray(data.recipes) ? data.recipes : []) {
+            const id = idOf(recipe?.id);
+            if (id && hasStatus(recipe.ex)) specializedRecipes.add(id);
+        }
         return {
             chefs: [...chefs.values()],
             equipmentStock: [...equipmentStock],
+            specializedRecipes,
             unknown: Object.fromEntries(Object.entries(unknown).map(([key, ids]) => [key, [...ids]])),
         };
     }

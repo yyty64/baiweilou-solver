@@ -84,6 +84,7 @@ select { appearance: none; padding-right: 1.55rem; background-image: linear-grad
 .account details { margin-top: .8rem; }
 .check-row { display: flex; align-items: center; gap: .45rem; margin-top: .8rem; }
 .check-row input { flex: none; width: 1.1rem; min-height: 0; height: 1.1rem; margin: 0; accent-color: var(--teal); }
+.dish-specialization { margin-top: .45rem; }
 .check-row + .muted { margin-top: .35rem; }
 .equipment-fields { display: grid; gap: .55rem; }
 .equipment-field { display: grid; gap: .3rem; min-width: 0; }

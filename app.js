@@ -62,10 +62,12 @@ function setCatalog(data) {
         option.value = label;
         options.append(option);
         recipesByName.set(label, {
+            id: recipe.recipeId,
             name: recipe.name,
             flavor: recipe.condiment,
             requirements,
-            amount: recipe.price,
+            amount: Number(recipe.price),
+            specializationBonus: Number(recipe.exPrice) || 0,
             rarity: recipe.rarity,
             ingredientIds: recipe.materials.map(({ material }) => material),
             ingredients: recipe.materials.map(({ material, quantity }) => `${materialNames.get(material) ?? material}×${quantity}`),
@@ -87,7 +89,7 @@ function setCatalog(data) {
     $("open-backup").disabled = false;
     $("import-code").disabled = false;
     status("catalog-status", `图鉴已加载 · ${chefs.length} 位厨师 · ${recipes.length} 道菜谱`);
-    for (const row of $("dishes").children) updateDishRecipe(row);
+    for (const row of $("dishes").children) updateDishRecipe(row, true);
 }
 
 function updateResultState() {
@@ -114,22 +116,37 @@ function refreshDishLabels() {
     });
 }
 
-function updateDishRecipe(row) {
+function dishPrice(recipe, specialized) {
+    return recipe.amount + (specialized ? recipe.specializationBonus : 0);
+}
+
+function updateDishRecipe(row, refreshDefaults = false) {
     const input = row.querySelector('[name="recipe"]');
     const amount = row.querySelector('[name="amount"]');
+    const specialized = row.querySelector('[name="specialized"]');
     const info = row.querySelector(".dish-info");
     const name = input.value.trim();
     const recipe = recipesByName.get(name);
     input.disabled = !catalog;
     amount.disabled = !recipe;
+    specialized.disabled = !recipe;
     if (!recipe) {
         delete row.dataset.recipe;
         amount.value = "";
+        specialized.checked = false;
         info.textContent = !catalog ? "请先加载图鉴。" : name ? "请选择匹配的图鉴菜谱。" : "";
         return;
     }
-    if (row.dataset.recipe !== name) amount.value = recipe.amount;
-    row.dataset.recipe = name;
+    const changed = row.dataset.recipe !== name;
+    if (changed) {
+        row.dataset.recipe = name;
+        delete row.dataset.manualSpecialization;
+        delete row.dataset.manualAmount;
+    }
+    if (refreshDefaults || changed) {
+        if (!row.dataset.manualSpecialization) specialized.checked = archive?.specializedRecipes.has(recipe.id) ?? false;
+        if (!row.dataset.manualAmount) amount.value = dishPrice(recipe, specialized.checked);
+    }
     const flavor = flavorLabels[flavors.indexOf(recipe.flavor)];
     const skills = recipe.requirements.map(({ technique, requiredSkill }) =>
         `${techniqueLabels[techniques.indexOf(technique)]} ${requiredSkill}`);
@@ -143,13 +160,24 @@ function addDish(focus = false) {
         refreshDishLabels();
         updateResultState();
     });
-    row.querySelector('[name="recipe"]').addEventListener("input", () => updateDishRecipe(row));
-    row.querySelector('[name="recipe"]').addEventListener("change", () => updateDishRecipe(row));
+    const recipeInput = row.querySelector('[name="recipe"]');
+    const amount = row.querySelector('[name="amount"]');
+    const specialized = row.querySelector('[name="specialized"]');
+    recipeInput.addEventListener("input", () => updateDishRecipe(row));
+    recipeInput.addEventListener("change", () => updateDishRecipe(row));
+    amount.addEventListener("input", () => { row.dataset.manualAmount = "true"; });
+    specialized.addEventListener("input", () => {
+        const recipe = recipesByName.get(row.dataset.recipe);
+        if (!recipe) return;
+        row.dataset.manualSpecialization = "true";
+        delete row.dataset.manualAmount;
+        amount.value = dishPrice(recipe, specialized.checked);
+    });
     $("dishes").append(row);
     updateDishRecipe(row);
     refreshDishLabels();
     updateResultState();
-    if (focus) row.querySelector('[name="recipe"]').focus();
+    if (focus) recipeInput.focus();
 }
 
 function useArchive(data) {
@@ -168,6 +196,7 @@ function useArchive(data) {
     setDatalist("equipment-chef-options", entries);
     $("equipment-chef").value = "";
     refreshEquipmentEditor();
+    for (const row of $("dishes").children) updateDishRecipe(row, true);
     updateResultState();
 }
 
