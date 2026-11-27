@@ -136,10 +136,9 @@ function updateDishRecipe(row, refreshDefaults = false) {
     const info = row.querySelector(".dish-info");
     const name = input.value.trim();
     const recipe = recipesByName.get(name);
-    const preset = Boolean($("stage-preset").value);
     input.disabled = !catalog;
     amount.disabled = !recipe;
-    specialized.disabled = preset || !recipe;
+    specialized.disabled = !recipe;
     if (!recipe) {
         delete row.dataset.recipe;
         amount.value = "";
@@ -152,9 +151,8 @@ function updateDishRecipe(row, refreshDefaults = false) {
         row.dataset.recipe = name;
         delete row.dataset.manualSpecialization;
         delete row.dataset.manualAmount;
-        if (preset) amount.value = "";
     }
-    if (!preset && (refreshDefaults || changed)) {
+    if (refreshDefaults || changed) {
         if (!row.dataset.manualSpecialization) specialized.checked = archive?.specializedRecipes.has(recipe.id) ?? false;
         if (!row.dataset.manualAmount) amount.value = dishPrice(recipe, specialized.checked);
     }
@@ -175,10 +173,6 @@ function createDishRow(recipeName = "") {
     const amount = row.querySelector('[name="amount"]');
     const specialized = row.querySelector('[name="specialized"]');
     recipeInput.value = recipeName;
-    if ($("stage-preset").value) {
-        row.querySelector(".dish-specialization").hidden = true;
-        amount.placeholder = "手填金额";
-    }
     recipeInput.addEventListener("input", () => updateDishRecipe(row));
     recipeInput.addEventListener("change", () => updateDishRecipe(row));
     amount.addEventListener("input", () => { row.dataset.manualAmount = "true"; });
