@@ -84,7 +84,7 @@ select { appearance: none; padding-right: 1.55rem; background-image: linear-grad
 .account details { margin-top: .8rem; }
 .check-row { display: flex; align-items: center; gap: .45rem; margin-top: .8rem; }
 .check-row input { flex: none; width: 1.1rem; min-height: 0; height: 1.1rem; margin: 0; accent-color: var(--teal); }
-#equipment-source-panel { display: grid; gap: .35rem; margin-top: .6rem; }
+.check-row + .muted { margin-top: .35rem; }
 .equipment-fields { display: grid; gap: .55rem; }
 .equipment-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .7rem; }
 #equipment-editor > p:not(:empty) { margin-top: .4rem; }

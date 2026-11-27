@@ -184,14 +184,9 @@ function readEquipment(input, currentId) {
     throw new Error(`图鉴中找不到「${name}」，请选择厨具或留空。`);
 }
 
-function availableEquipment(added = equipmentOverrides) {
+function catalogEquipmentStock() {
     const stock = new Map(archive.equipmentStock);
-    if ($("equipment-source").value === "catalog") {
-        for (const id of equipmentNames.keys()) if (!stock.has(id)) stock.set(id, 1);
-    }
-    for (const id of added.values()) {
-        if (equipmentNames.has(id) && !stock.has(id)) stock.set(id, 1);
-    }
+    for (const id of equipmentNames.keys()) if (!stock.has(id)) stock.set(id, 1);
     return stock;
 }
 
@@ -206,17 +201,7 @@ function validateEquipment(assignments, stock) {
 }
 
 function refreshEquipmentEditor() {
-    const enabled = $("use-equipment").checked && !!archive?.chefs.length;
-    $("equipment-source-panel").hidden = !enabled;
-    $("equipment-editor").hidden = !enabled;
-    if (enabled) {
-        const stock = availableEquipment();
-        const count = [...stock.values()].reduce((total, quantity) => total + quantity, 0);
-        $("equipment-source-info").textContent = $("equipment-source").value === "catalog"
-            ? `从图鉴模拟 ${numberFormat.format(count)} 件厨具，每种至少一件。`
-            : count ? `可调配 ${numberFormat.format(count)} 件厨具，来自档案中的已绑定厨具及手动补入的厨具。`
-                : "档案中没有可调配的厨具。可改选全图鉴模拟，或手动补入厨具。";
-    }
+    $("equipment-editor").hidden = !$("use-equipment").checked || !archive?.chefs.length;
     const name = $("equipment-chef").value.trim();
     const chef = ownedChefsByName.get(name);
     $("equipment-item").disabled = !chef;
@@ -262,7 +247,7 @@ function readRules() {
         goal: $("search-goal").value,
         targetMode: $("target-mode").value, searchMs: time === "complete" ? Infinity : Number(time),
         ...($("use-equipment").checked && {
-            equipmentStock: [...availableEquipment()],
+            equipmentStock: [...catalogEquipmentStock()],
             equipmentLocks: [...equipmentOverrides],
         }),
     };
@@ -270,11 +255,12 @@ function readRules() {
 
 function renderLineup(best, stage, rules, originalScore) {
     const team = node("ol", undefined, "result-team");
-    const editable = $("use-equipment").checked;
+    const editable = Boolean(rules.equipmentStock);
     const fields = [];
     for (const chef of best.team) {
         const item = node("li", chef.name);
-        if (chef.jadeNames.length) item.append(node("small", chef.jadeNames.join(" · ")));
+        if (!editable && chef.equipId) item.append(node("small", `厨具 ${equipmentLabel(chef.equipId)}`));
+        if (chef.jadeNames.length) item.append(node("small", `遗玉 ${chef.jadeNames.join(" · ")}`));
         if (editable) {
             const label = node("label", "厨具", "result-equipment");
             const input = node("input");
@@ -302,7 +288,7 @@ function renderLineup(best, stage, rules, originalScore) {
         event.preventDefault();
         try {
             const equipment = new Map(fields.map(({ chef, input }) => [chef.id, readEquipment(input, chef.equipId)]));
-            validateEquipment(equipment, availableEquipment(equipment));
+            validateEquipment(equipment, new Map(rules.equipmentStock));
             const { chefs, score, withEquipment } = BaiweiEngine.createEvaluator(catalog, archive, stage, rules);
             const byId = new Map(chefs.map((chef) => [chef.id, chef]));
             const adjusted = score(best.team.map(({ id }) => withEquipment(byId.get(id), equipment.get(id))));
@@ -395,17 +381,14 @@ function runSolver() {
     try {
         const stage = readStage();
         const rules = readRules();
-        const selectedArchive = $("use-equipment").checked ? archive : {
-            ...archive, chefs: archive.chefs.map((chef) => ({ ...chef, equip: null })),
-        };
         $("result").replaceChildren();
         $("solve").textContent = "停止搜索";
-        status("solver-status", $("use-equipment").checked ? "正在搜索阵容和厨具搭配…" : "正在计算厨师阵容…");
+        status("solver-status", rules.equipmentStock ? "正在搜索阵容和厨具搭配…" : "正在按档案装备搜索阵容…");
         if (location.protocol === "file:") {
             offlineRun = setTimeout(() => {
                 updateResultState();
                 try {
-                    renderResult(BaiweiEngine.solve(catalog, selectedArchive, stage, { ...rules, searchMs: 2000 }), stage, rules);
+                    renderResult(BaiweiEngine.solve(catalog, archive, stage, { ...rules, searchMs: 2000 }), stage, rules);
                 } catch (error) {
                     status("solver-status", error.message, true);
                 }
@@ -427,7 +410,7 @@ function runSolver() {
             updateResultState();
             status("solver-status", "无法启动求解器。请通过本地 HTTP 服务打开网页。", true);
         };
-        worker.postMessage({ catalog, archive: selectedArchive, stage, rules });
+        worker.postMessage({ catalog, archive, stage, rules });
     } catch (error) {
         updateResultState();
         status("solver-status", error.message, true);
@@ -481,10 +464,6 @@ $("use-equipment").addEventListener("change", () => {
     refreshEquipmentEditor();
     updateResultState();
 });
-$("equipment-source").addEventListener("change", () => {
-    refreshEquipmentEditor();
-    updateResultState();
-});
 $("equipment-chef").addEventListener("input", refreshEquipmentEditor);
 $("equipment-form").addEventListener("submit", (event) => {
     event.preventDefault();
@@ -493,7 +472,7 @@ $("equipment-form").addEventListener("submit", (event) => {
     try {
         const id = readEquipment($("equipment-item"), equippedId(chef));
         const locks = new Map(equipmentOverrides).set(chef.chefId, id);
-        validateEquipment(locks, availableEquipment(locks));
+        validateEquipment(locks, catalogEquipmentStock());
         equipmentOverrides = locks;
         refreshEquipmentEditor();
         updateResultState();

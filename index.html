@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="style.css">
   <script src="archive.js" defer></script>
   <script src="engine.js" defer></script>
-  <script src="app.js" defer></script>
+  <script src="app.js?v=2" defer></script>
 </head>
 <body>
   <header class="masthead">
@@ -47,14 +47,11 @@
         <p id="catalog-status" class="muted" role="status">正在加载图鉴</p>
         <button class="file-button" id="open-catalog" type="button" hidden>选择图鉴数据文件</button>
         <input type="file" id="catalog-file" accept=".json,application/json" hidden>
-        <label class="check-row"><input id="use-equipment" type="checkbox" checked>使用厨具</label>
-        <div id="equipment-source-panel" hidden>
-          <label>自动搭配范围<select id="equipment-source"><option value="archive">档案厨具</option><option value="catalog">全图鉴（模拟）</option></select></label>
-          <p id="equipment-source-info" class="muted"></p>
-        </div>
+        <label class="check-row"><input id="use-equipment" type="checkbox" aria-describedby="equipment-mode-help" checked>使用厨具</label>
+        <p id="equipment-mode-help" class="muted">勾选后从全图鉴自动试配。取消勾选则按档案中已绑定的厨具计算。两种方式都计入已装备的遗玉。</p>
         <details id="equipment-editor" hidden>
           <summary>固定个别厨师的厨具</summary>
-          <p class="muted">该厨师上阵时使用指定厨具，留空可固定为空。可从图鉴补入档案里没有的厨具。</p>
+          <p class="muted">该厨师上阵时使用指定厨具，留空可固定为空。</p>
           <form class="equipment-fields" id="equipment-form">
             <label>厨师<input id="equipment-chef" type="text" list="equipment-chef-options" placeholder="输入已拥有的厨师名" autocomplete="off" required></label>
             <label>厨具<input id="equipment-item" type="text" list="equipment-options" placeholder="搜索图鉴厨具" autocomplete="off" disabled></label>
