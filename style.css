@@ -86,6 +86,71 @@ select { appearance: none; padding-right: 1.55rem; background-image: linear-grad
 .check-row input { flex: none; width: 1.1rem; min-height: 0; height: 1.1rem; margin: 0; accent-color: var(--teal); }
 .check-row + .muted { margin-top: .35rem; }
 .equipment-fields { display: grid; gap: .55rem; }
+.equipment-field { display: grid; gap: .3rem; min-width: 0; }
+.equipment-field > span { font-size: .9rem; font-weight: 600; }
+.equipment-picker { position: relative; min-width: 0; }
+.equipment-trigger {
+  position: relative;
+  display: grid;
+  gap: .1rem;
+  width: 100%;
+  min-height: 2.55rem;
+  padding: .4rem 2rem .4rem .55rem;
+  border: 1px solid #adbeb7;
+  border-radius: 6px;
+  color: var(--ink);
+  background: white;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.equipment-trigger::after {
+  position: absolute;
+  top: 50%;
+  right: .85rem;
+  width: .45rem;
+  height: .45rem;
+  border: solid var(--muted);
+  border-width: 0 2px 2px 0;
+  content: "";
+  transform: translateY(-70%) rotate(45deg);
+}
+.equipment-trigger[aria-expanded="true"]::after { transform: translateY(-25%) rotate(225deg); }
+.equipment-picker-panel {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + .3rem);
+  inset-inline: 0;
+  display: grid;
+  gap: .35rem;
+  padding: .45rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 6px 18px #143c3324;
+}
+.equipment-picker-clear {
+  min-height: 2rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--teal);
+  background: #f5f9f6;
+}
+.equipment-picker-clear:hover { background: #edf5f0; }
+.equipment-picker-options { position: relative; max-height: min(17rem, 42vh); overflow-y: auto; }
+.equipment-picker-option {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .1rem .55rem;
+  padding: .45rem .55rem;
+  border-radius: 5px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.equipment-picker-option:hover, .equipment-picker-option.active { background: #edf5f0; }
+.equipment-picker-option[aria-selected="true"] { color: var(--teal); font-weight: 650; }
+.equipment-picker-bonus { color: var(--muted); font-size: .85rem; font-weight: 400; }
+.equipment-picker-empty { padding: .35rem .55rem; }
 .equipment-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .7rem; }
 #equipment-editor > p:not(:empty) { margin-top: .4rem; }
 summary { cursor: pointer; color: var(--teal); font-weight: 650; }

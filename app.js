@@ -11,10 +11,11 @@ let catalog;
 let archive;
 let chefNames = new Map();
 let recipesByName = new Map();
-let equipmentNames = new Map();
-let equipmentIds = new Map();
+let equipmentOptions = new Map();
 let ownedChefsByName = new Map();
 let equipmentOverrides = new Map();
+let openEquipmentPicker;
+let equipmentPickerCount = 0;
 let worker;
 let offlineRun;
 
@@ -76,10 +77,12 @@ function setCatalog(data) {
     chefNames = new Map(catalog.chefs.map((item) => [item.chefId, item.name]));
     const equipmentNameCounts = new Map();
     for (const { name } of equips) equipmentNameCounts.set(name, (equipmentNameCounts.get(name) ?? 0) + 1);
-    equipmentNames = new Map(equips.map(({ equipId, name }) =>
-        [equipId, equipmentNameCounts.get(name) > 1 ? `${name}（${equipId}）` : name]));
-    equipmentIds = new Map([...equipmentNames].map(([id, name]) => [name, id]));
-    setDatalist("equipment-options", equipmentIds.keys());
+    const descriptions = new Map(skills.map(({ skillId, desc }) => [skillId, desc]));
+    equipmentOptions = new Map(equips.map(({ equipId, name, skill }) => {
+        const label = equipmentNameCounts.get(name) > 1 ? `${name}（${equipId}）` : name;
+        const bonus = [skill].flat().map((id) => descriptions.get(id)).filter(Boolean).join(" · ");
+        return [equipId, { label, bonus, searchable: `${label} ${bonus}`.normalize("NFKC").toLowerCase() }];
+    }));
     $("open-catalog").hidden = true;
     $("open-backup").disabled = false;
     $("import-code").disabled = false;
@@ -88,6 +91,7 @@ function setCatalog(data) {
 }
 
 function updateResultState() {
+    openEquipmentPicker?.close();
     if (worker) {
         worker.terminate();
         worker = undefined;
@@ -172,21 +176,158 @@ function equippedId(chef, overrides = equipmentOverrides) {
 }
 
 function equipmentLabel(id) {
-    return id ? equipmentNames.get(id) ?? `图鉴未收录 #${id}` : "";
+    return id ? equipmentOptions.get(id)?.label ?? `图鉴未收录 #${id}` : "";
 }
 
-function readEquipment(input, currentId) {
-    const name = input.value.trim();
-    if (!name) return null;
-    if (equipmentIds.has(name)) return equipmentIds.get(name);
-    if (name === equipmentLabel(currentId)) return currentId;
-    input.focus();
-    throw new Error(`图鉴中找不到「${name}」，请选择厨具或留空。`);
+function createEquipmentPicker(root, label, initialId = null) {
+    const panelId = `equipment-picker-${++equipmentPickerCount}`;
+    const trigger = node("button", undefined, "equipment-trigger");
+    trigger.type = "button";
+    trigger.setAttribute("aria-controls", panelId);
+    trigger.setAttribute("aria-expanded", "false");
+    const panel = node("div", undefined, "equipment-picker-panel");
+    panel.id = panelId;
+    panel.hidden = true;
+    const search = node("input");
+    const list = node("div", undefined, "equipment-picker-options");
+    list.id = `${panelId}-options`;
+    list.setAttribute("role", "listbox");
+    list.setAttribute("aria-label", `${label}选项`);
+    search.type = "search";
+    search.placeholder = "搜索厨具名称或加成";
+    search.autocomplete = "off";
+    search.setAttribute("role", "combobox");
+    search.setAttribute("aria-label", `查找${label}`);
+    search.setAttribute("aria-controls", list.id);
+    search.setAttribute("aria-expanded", "false");
+    const clear = node("button", "清空厨具", "equipment-picker-clear");
+    clear.type = "button";
+    const empty = node("p", "没有匹配的厨具", "muted equipment-picker-empty");
+    empty.setAttribute("role", "status");
+    panel.append(search, clear, list, empty);
+    root.classList.add("equipment-picker");
+    root.append(trigger, panel);
+
+    let value = initialId;
+    let options = [];
+    let active = -1;
+
+    function renderValue() {
+        const name = equipmentLabel(value) || "请选择厨具";
+        const bonus = equipmentOptions.get(value)?.bonus;
+        trigger.replaceChildren(node("span", name));
+        if (bonus) trigger.append(node("span", bonus, "equipment-picker-bonus"));
+        trigger.setAttribute("aria-label", [label, name, bonus].filter(Boolean).join("，"));
+    }
+
+    function setActive(index) {
+        options[active]?.classList.remove("active");
+        active = index;
+        const option = options[index];
+        if (!option) {
+            search.removeAttribute("aria-activedescendant");
+            return;
+        }
+        option.classList.add("active");
+        search.setAttribute("aria-activedescendant", option.id);
+        const top = option.offsetTop;
+        const bottom = top + option.offsetHeight;
+        if (top < list.scrollTop) list.scrollTop = top;
+        else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
+    }
+
+    function filterOptions() {
+        const terms = search.value.trim().normalize("NFKC").toLowerCase().split(/\s+/);
+        options = [];
+        for (const [id, entry] of equipmentOptions) {
+            if (!terms.every((term) => entry.searchable.includes(term))) continue;
+            const row = node("div", undefined, "equipment-picker-option");
+            row.id = `${list.id}-${id}`;
+            row.dataset.equipmentId = id;
+            row.setAttribute("role", "option");
+            row.setAttribute("aria-selected", String(id === value));
+            row.append(node("span", entry.label));
+            if (entry.bonus) row.append(node("span", entry.bonus, "equipment-picker-bonus"));
+            options.push(row);
+        }
+        list.replaceChildren(...options);
+        list.scrollTop = 0;
+        list.hidden = !options.length;
+        empty.hidden = !!options.length;
+        const index = terms[0] ? 0 : options.findIndex((row) => Number(row.dataset.equipmentId) === value);
+        setActive(options.length ? Math.max(0, index) : -1);
+    }
+
+    function close() {
+        if (panel.hidden) return;
+        panel.hidden = true;
+        trigger.setAttribute("aria-expanded", "false");
+        search.setAttribute("aria-expanded", "false");
+        search.removeAttribute("aria-activedescendant");
+        list.replaceChildren();
+        options = [];
+        active = -1;
+        openEquipmentPicker = undefined;
+    }
+
+    function choose(id) {
+        value = id;
+        renderValue();
+        close();
+        trigger.focus();
+    }
+
+    trigger.addEventListener("click", () => {
+        if (!panel.hidden) {
+            close();
+            return;
+        }
+        openEquipmentPicker?.close();
+        openEquipmentPicker = { root, close };
+        panel.hidden = false;
+        trigger.setAttribute("aria-expanded", "true");
+        search.setAttribute("aria-expanded", "true");
+        search.value = "";
+        filterOptions();
+        search.focus();
+    });
+    search.addEventListener("input", filterOptions);
+    search.addEventListener("keydown", (event) => {
+        if (event.isComposing) return;
+        if (event.key === "Enter") {
+            event.preventDefault();
+            if (active >= 0) choose(Number(options[active].dataset.equipmentId));
+        } else if (options.length && (event.key === "ArrowDown" || event.key === "ArrowUp")) {
+            event.preventDefault();
+            const step = event.key === "ArrowDown" ? 1 : -1;
+            setActive(Math.max(0, Math.min(options.length - 1, active + step)));
+        }
+    });
+    root.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape" || panel.hidden || event.isComposing) return;
+        event.preventDefault();
+        close();
+        trigger.focus();
+    });
+    clear.addEventListener("click", () => choose(null));
+    list.addEventListener("click", (event) => {
+        const row = event.target.closest("[data-equipment-id]");
+        if (row) choose(Number(row.dataset.equipmentId));
+    });
+    renderValue();
+    return {
+        get value() { return value; },
+        set value(id) { value = id; renderValue(); },
+        set disabled(disabled) {
+            trigger.disabled = disabled;
+            if (disabled) close();
+        },
+    };
 }
 
 function catalogEquipmentStock() {
     const stock = new Map(archive.equipmentStock);
-    for (const id of equipmentNames.keys()) if (!stock.has(id)) stock.set(id, 1);
+    for (const id of equipmentOptions.keys()) if (!stock.has(id)) stock.set(id, 1);
     return stock;
 }
 
@@ -204,10 +345,10 @@ function refreshEquipmentEditor() {
     $("equipment-editor").hidden = !$("use-equipment").checked || !archive?.chefs.length;
     const name = $("equipment-chef").value.trim();
     const chef = ownedChefsByName.get(name);
-    $("equipment-item").disabled = !chef;
+    equipmentItem.disabled = !chef;
     $("save-equipment").disabled = !chef;
     $("restore-equipment").disabled = !chef || !equipmentOverrides.has(chef.chefId);
-    $("equipment-item").value = chef ? equipmentLabel(equippedId(chef)) : "";
+    equipmentItem.value = chef ? equippedId(chef) : null;
     if (name && !chef) status("equipment-status", "请选择已导入的厨师。", true);
     else status("equipment-status", equipmentOverrides.size ? `已固定 ${equipmentOverrides.size} 位厨师的厨具` : "");
 }
@@ -262,16 +403,12 @@ function renderLineup(best, stage, rules, originalScore) {
         if (!editable && chef.equipId) item.append(node("small", `厨具 ${equipmentLabel(chef.equipId)}`));
         if (chef.jadeNames.length) item.append(node("small", `遗玉 ${chef.jadeNames.join(" · ")}`));
         if (editable) {
-            const label = node("label", "厨具", "result-equipment");
-            const input = node("input");
-            input.setAttribute("list", "equipment-options");
-            input.setAttribute("aria-label", `${chef.name}的厨具`);
-            input.autocomplete = "off";
-            input.placeholder = "搜索厨具，留空代表卸下";
-            input.value = equipmentLabel(chef.equipId);
-            label.append(input);
-            item.append(label);
-            fields.push({ chef, input });
+            const field = node("div", undefined, "result-equipment equipment-field");
+            const root = node("div");
+            const picker = createEquipmentPicker(root, `${chef.name}的厨具`, chef.equipId);
+            field.append(node("span", "厨具"), root);
+            item.append(field);
+            fields.push({ chef, picker });
         }
         team.append(item);
     }
@@ -287,7 +424,7 @@ function renderLineup(best, stage, rules, originalScore) {
     form.addEventListener("submit", (event) => {
         event.preventDefault();
         try {
-            const equipment = new Map(fields.map(({ chef, input }) => [chef.id, readEquipment(input, chef.equipId)]));
+            const equipment = new Map(fields.map(({ chef, picker }) => [chef.id, picker.value]));
             validateEquipment(equipment, new Map(rules.equipmentStock));
             const { chefs, score, withEquipment } = BaiweiEngine.createEvaluator(catalog, archive, stage, rules);
             const byId = new Map(chefs.map((chef) => [chef.id, chef]));
@@ -460,6 +597,14 @@ $("catalog-file").addEventListener("change", async (event) => {
     }
 });
 
+const equipmentItem = createEquipmentPicker($("equipment-item"), "厨具");
+equipmentItem.disabled = true;
+function closeEquipmentPickerOutside(event) {
+    if (openEquipmentPicker && !openEquipmentPicker.root.contains(event.target)) openEquipmentPicker.close();
+}
+document.addEventListener("pointerdown", closeEquipmentPickerOutside);
+document.addEventListener("focusin", closeEquipmentPickerOutside);
+
 $("use-equipment").addEventListener("change", () => {
     refreshEquipmentEditor();
     updateResultState();
@@ -470,8 +615,7 @@ $("equipment-form").addEventListener("submit", (event) => {
     const chef = ownedChefsByName.get($("equipment-chef").value.trim());
     if (!chef || !$("use-equipment").checked) return;
     try {
-        const id = readEquipment($("equipment-item"), equippedId(chef));
-        const locks = new Map(equipmentOverrides).set(chef.chefId, id);
+        const locks = new Map(equipmentOverrides).set(chef.chefId, equipmentItem.value);
         validateEquipment(locks, catalogEquipmentStock());
         equipmentOverrides = locks;
         refreshEquipmentEditor();
