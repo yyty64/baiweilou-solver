@@ -93,7 +93,15 @@
       <p class="muted">先算基础售价，再叠加售价、金币与品级加成。各菜分数相加后四舍五入。</p>
       <div class="rule-grid">
         <label>达到目标分时<select id="target-mode"><option value="strict">必须超过目标分</option><option value="inclusive">等于目标分也算过关</option></select></label>
-        <label>搜索时限<select id="search-time"><option value="8000">8 秒</option><option value="60000">60 秒</option><option value="complete">完整遍历，可手动停止</option></select></label>
+        <label>搜索时限
+          <select id="search-time">
+            <option value="8000">8 秒</option>
+            <option value="15000">15 秒</option>
+            <option value="30000">30 秒</option>
+            <option value="60000">60 秒</option>
+            <option value="complete">完整遍历，可手动停止</option>
+          </select>
+        </label>
       </div>
     </details>
     <section class="panel actions" aria-labelledby="result-heading">
