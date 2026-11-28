@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="按百味楼点单和个人厨师档案计算过关阵容。">
   <title>百味楼配队 · 爆炒江湖</title>
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=6">
   <script src="archive.js?v=2" defer></script>
   <script src="engine.js" defer></script>
-  <script src="app.js?v=8" defer></script>
+  <script src="app.js?v=9" defer></script>
 </head>
 <body>
   <header class="masthead">
@@ -73,7 +73,7 @@
           <p class="muted">该厨师上阵时使用指定厨具，留空可固定为空。</p>
           <form class="equipment-fields" id="equipment-form">
             <label>厨师<input id="equipment-chef" type="text" list="equipment-chef-options" placeholder="输入已拥有的厨师名" autocomplete="off" required></label>
-            <div class="equipment-field"><span>厨具</span><div id="equipment-item"></div></div>
+            <div class="picker-field"><span>厨具</span><div id="equipment-item"></div></div>
             <div class="equipment-buttons">
               <button class="secondary" id="save-equipment" type="submit" disabled>固定配置</button>
               <button class="file-button" id="restore-equipment" type="button" disabled>恢复自动搭配</button>

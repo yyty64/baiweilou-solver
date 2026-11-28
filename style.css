@@ -90,10 +90,10 @@ select { appearance: none; padding-right: 1.55rem; background-image: linear-grad
 .equipment-source { margin-top: .55rem; }
 .equipment-source + .muted { margin-top: .35rem; }
 .equipment-fields { display: grid; gap: .55rem; }
-.equipment-field { display: grid; gap: .3rem; min-width: 0; }
-.equipment-field > span { font-size: .9rem; font-weight: 600; }
-.equipment-picker { position: relative; min-width: 0; }
-.equipment-trigger {
+.picker-field { display: grid; gap: .3rem; min-width: 0; }
+.picker-field > span { font-size: .9rem; font-weight: 600; }
+.picker { position: relative; min-width: 0; }
+.picker-trigger {
   position: relative;
   display: grid;
   gap: .1rem;
@@ -107,7 +107,7 @@ select { appearance: none; padding-right: 1.55rem; background-image: linear-grad
   text-align: left;
   overflow-wrap: anywhere;
 }
-.equipment-trigger::after {
+.picker-trigger::after {
   position: absolute;
   top: 50%;
   right: .85rem;
@@ -118,8 +118,8 @@ select { appearance: none; padding-right: 1.55rem; background-image: linear-grad
   content: "";
   transform: translateY(-70%) rotate(45deg);
 }
-.equipment-trigger[aria-expanded="true"]::after { transform: translateY(-25%) rotate(225deg); }
-.equipment-picker-panel {
+.picker-trigger[aria-expanded="true"]::after { transform: translateY(-25%) rotate(225deg); }
+.picker-panel {
   position: absolute;
   z-index: 3;
   top: calc(100% + .3rem);
@@ -132,16 +132,16 @@ select { appearance: none; padding-right: 1.55rem; background-image: linear-grad
   background: white;
   box-shadow: 0 6px 18px #143c3324;
 }
-.equipment-picker-clear {
+.picker-clear {
   min-height: 2rem;
   border: 1px solid var(--line);
   border-radius: 5px;
   color: var(--teal);
   background: #f5f9f6;
 }
-.equipment-picker-clear:hover { background: #edf5f0; }
-.equipment-picker-options { position: relative; max-height: min(17rem, 42vh); overflow-y: auto; }
-.equipment-picker-option {
+.picker-clear:hover { background: #edf5f0; }
+.picker-options { position: relative; max-height: min(17rem, 42vh); overflow-y: auto; }
+.picker-option {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
@@ -151,10 +151,11 @@ select { appearance: none; padding-right: 1.55rem; background-image: linear-grad
   cursor: pointer;
   overflow-wrap: anywhere;
 }
-.equipment-picker-option:hover, .equipment-picker-option.active { background: #edf5f0; }
-.equipment-picker-option[aria-selected="true"] { color: var(--teal); font-weight: 650; }
-.equipment-picker-bonus { color: var(--muted); font-size: .85rem; font-weight: 400; }
-.equipment-picker-empty { padding: .35rem .55rem; }
+.chef-picker .picker-option, .picker-descriptions { display: grid; gap: .12rem; }
+.picker-option:hover, .picker-option.active { background: #edf5f0; }
+.picker-option[aria-selected="true"] { color: var(--teal); font-weight: 650; }
+.picker-description, .picker-descriptions { color: var(--muted); font-size: .85rem; font-weight: 400; }
+.picker-empty { padding: .35rem .55rem; }
 .equipment-buttons { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .7rem; }
 #equipment-editor > p:not(:empty) { margin-top: .4rem; }
 summary { cursor: pointer; color: var(--teal); font-weight: 650; }
@@ -168,9 +169,9 @@ summary { cursor: pointer; color: var(--teal); font-weight: 650; }
 .search-controls select { min-width: 8rem; }
 .result-summary { padding: .7rem .85rem; border-left: 3px solid #327568; background: #edf5f0; margin-top: 1rem; }
 .result-summary strong { color: var(--teal); font-size: 1.25rem; }
-.result-team { display: grid; gap: .4rem; margin: .85rem 0; padding-left: 1.5rem; }
-.result-team small { margin-left: .6rem; color: var(--muted); font-size: .86rem; }
-.result-equipment { max-width: 24rem; margin-top: .25rem; }
+.result-team { display: grid; gap: .75rem; margin: .85rem 0; padding-left: 1.5rem; }
+.result-team small { display: block; margin-top: .25rem; color: var(--muted); font-size: .86rem; }
+.lineup-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .45rem .75rem; max-width: 48rem; }
 .numbers { display: flex; flex-wrap: wrap; gap: .45rem; margin: .8rem 0; }
 .numbers span { padding: .3rem .55rem; background: #eef3f0; border-radius: 4px; }
 .table-wrap { overflow: auto; margin-top: .75rem; }
@@ -190,4 +191,5 @@ th { background: #f0f5f2; color: var(--teal); font-size: .9rem; }
   .stage-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .rule-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .section-top { display: grid; }
+  .lineup-fields { grid-template-columns: minmax(0, 1fr); }
 }
