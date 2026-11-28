@@ -425,13 +425,15 @@
         const shortlist = [];
         const refined = new Set();
         const lineupDeadline = automatic && !exactEquipment ? start + budget * 0.65 : deadline;
+        const swapBudget = maxSlots > 1 && Number.isFinite(budget) ? Math.min(1200, budget * 0.15) : 0;
+        const traversalDeadline = lineupDeadline - swapBudget;
         const compareTarget = (value) => rules.targetMode === "strict" ? value > stage.target : value >= stage.target;
         let evaluated = 0, best = null, bestWithNotes = null, lineupLimited = false;
         const stop = () => rules.goal === "pass" && best && compareTarget(best.score) &&
             (!automatic || exactEquipment || refined.size > 0);
         function searchStopped() {
             if (stop()) return true;
-            lineupLimited ||= Date.now() >= lineupDeadline;
+            lineupLimited ||= Date.now() >= traversalDeadline;
             return lineupLimited;
         }
 
@@ -493,7 +495,7 @@
             }
         }
         let frontier = ranking.slice(0, 10).map(({ chef, ...value }) => ({ team: [chef], ...value }));
-        const seedDeadline = Math.min(lineupDeadline, Date.now() + Math.max(200, Math.min(budget / 3, 3000)));
+        const seedDeadline = Math.min(traversalDeadline, Date.now() + Math.max(200, Math.min(budget / 3, 3000)));
         for (let size = 2; size <= maxSlots && !stop(); size++) {
             const next = [];
             seedSearch:
@@ -514,12 +516,40 @@
             if (Date.now() >= seedDeadline) break;
         }
         if (automatic && !exactEquipment && rules.goal === "pass") {
-            refine(4, Math.min(lineupDeadline, Date.now() + Math.min(budget / 5, 1600)));
+            refine(4, Math.min(traversalDeadline, Date.now() + Math.min(budget / 5, 1600)));
+        }
+
+        const ordered = ranking.map(({ chef }) => chef);
+        const chefsById = indexBy(chefs, "id");
+        // Team-wide price skills can have little value in the solo ranking.
+        const teamPriceChefs = ordered.filter((chef) => [...chef.innate, ...chef.ultimate, ...chef.jade, ...chef.suit]
+            .some((effect) => effect.condition === "Partial" && effect.value > 0 && isPrice(effect.type) && evaluator.relevant(effect)));
+        const swapCandidates = new Set([...teamPriceChefs, ...ordered]);
+        let lastSwapped;
+        function inspectSwaps(limit) {
+            for (let round = 0; round < 2 && !stop() && Date.now() < limit; round++) {
+                const current = best ?? bestWithNotes;
+                if (!current || current === lastSwapped) return;
+                const team = current.team.map(({ id }) => chefsById.get(id));
+                const positions = Math.min(team.length + 1, maxSlots);
+                for (const chef of swapCandidates) {
+                    if (team.includes(chef)) continue;
+                    for (let position = 0; position < positions; position++) {
+                        if (stop() || Date.now() >= limit) return;
+                        const group = [...team];
+                        group[position] = chef;
+                        inspect(group);
+                    }
+                }
+                lastSwapped = current;
+            }
+        }
+        if (maxSlots > 1 && !searchStopped()) {
+            inspect(ordered.slice(0, maxSlots));
+            if (swapBudget) inspectSwaps(Math.min(traversalDeadline, Date.now() + swapBudget / 2));
         }
 
         // Continue over the entire candidate space when time permits.
-        const ordered = ranking.map(({ chef }) => chef);
-        if (maxSlots > 1 && !searchStopped()) inspect(ordered.slice(0, maxSlots));
         function inspectOrders(team) {
             const sources = team.filter((chef) => needsNext.has(chef));
             if (!sources.length) {
@@ -574,13 +604,16 @@
                 if (stop() || lineupLimited) return;
             }
         }
-        if (maxSlots > 1) visit([], 0);
+        if (maxSlots > 1) {
+            visit([], 0);
+            if (lineupLimited && swapBudget) inspectSwaps(lineupDeadline);
+        }
         if (automatic && !exactEquipment && !stop()) refine(shortlist.length, deadline);
         const found = best ?? bestWithNotes;
-        const timedOut = Date.now() >= deadline;
+        const timedOut = lineupLimited || Date.now() >= deadline;
         return {
             best: found, passed: Boolean(best && compareTarget(best.score)), evaluated,
-            complete: !stop() && !lineupLimited && !timedOut && !bestWithNotes && (!automatic || exactEquipment), timedOut,
+            complete: !stop() && !timedOut && !bestWithNotes && (!automatic || exactEquipment), timedOut,
             excluded: Boolean(bestWithNotes),
             equipmentEvaluated: equipment?.evaluated,
             approximateEquipment: automatic && !exactEquipment,
