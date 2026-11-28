@@ -325,29 +325,15 @@
 
     function createEquipmentSearch(evaluator, rules, exact, deadline) {
         const { withEquipment, score, equipmentChoices, relevant } = evaluator;
-        const stock = new Map(rules.equipmentStock);
         const locks = new Map(rules.equipmentLocks);
-        const choices = equipmentChoices(stock.keys());
+        const choices = equipmentChoices(rules.equipmentIds);
         const hasNext = choices.some((id) => withEquipment({}, id).equipment.some((effect) =>
             effect.condition === "Next" && relevant(effect)));
         let evaluated = 0;
 
-        function changeCount(counts, id, change) {
-            if (id !== null) counts.set(id, (counts.get(id) ?? 0) + change);
-        }
-
         function baseline(team) {
             if (!locks.size) return team;
-            const remaining = new Map();
-            for (const chef of team) if (locks.has(chef.id)) changeCount(remaining, locks.get(chef.id), -1);
-            return team.map((chef) => {
-                if (locks.has(chef.id)) return withEquipment(chef, locks.get(chef.id));
-                const id = chef.equipId;
-                if (!stock.has(id)) return chef;
-                if ((remaining.get(id) ?? 0) + stock.get(id) <= 0) return withEquipment(chef, null);
-                changeCount(remaining, id, -1);
-                return chef;
-            });
+            return team.map((chef) => locks.has(chef.id) ? withEquipment(chef, locks.get(chef.id)) : chef);
         }
 
         function techniqueProgress(result) {
@@ -358,9 +344,6 @@
 
         function optimize(team, original, limit = deadline) {
             const seats = team.map((chef, index) => locks.has(chef.id) ? -1 : index).filter((index) => index >= 0);
-            const used = new Map();
-            for (const chef of team) changeCount(used, chef.equipId, 1);
-            const available = (id) => id === null || (used.get(id) ?? 0) < stock.get(id);
             const candidate = [...team];
             let best = original;
             let bestProgress = techniqueProgress(best);
@@ -387,16 +370,12 @@
                 const position = seats[index];
                 for (const id of choices) {
                     if (!canContinue()) return;
-                    if (!available(id)) continue;
                     candidate[position] = withEquipment(team[position], id);
-                    changeCount(used, id, 1);
                     assign(index + 1);
-                    changeCount(used, id, -1);
                 }
             }
 
             if (exact) {
-                for (const position of seats) changeCount(used, team[position].equipId, -1);
                 if (seats.length) assign(0);
                 return best;
             }
@@ -406,31 +385,13 @@
                 const before = bestTeam;
                 for (const position of seats) {
                     if (!canContinue()) break;
-                    const current = bestTeam;
-                    const old = current[position];
+                    const chef = bestTeam[position];
+                    candidate.splice(0, candidate.length, ...bestTeam);
                     for (const id of choices) {
                         if (!canContinue()) break;
-                        if (id === old.equipId) continue;
-                        candidate.splice(0, candidate.length, ...current);
-                        candidate[position] = withEquipment(old, id);
-                        if (available(id)) {
-                            inspect();
-                        } else {
-                            for (const other of seats) {
-                                if (current[other].equipId !== id) continue;
-                                candidate[other] = withEquipment(current[other], old.equipId);
-                                inspect();
-                                if (old.equipId !== null) {
-                                    candidate[other] = withEquipment(current[other], null);
-                                    inspect();
-                                }
-                                candidate[other] = current[other];
-                            }
-                        }
-                    }
-                    if (current !== bestTeam) {
-                        used.clear();
-                        for (const chef of bestTeam) changeCount(used, chef.equipId, 1);
+                        if (id === chef.equipId) continue;
+                        candidate[position] = withEquipment(chef, id);
+                        inspect();
                     }
                 }
                 if (before === bestTeam) break;
@@ -451,15 +412,15 @@
         const budget = rules.searchMs ?? 5000;
         const start = Date.now();
         const deadline = start + budget;
-        const automatic = Array.isArray(rules.equipmentStock);
-        const stockSize = rules.equipmentStock?.length ?? 0;
+        const automatic = Array.isArray(rules.equipmentIds);
+        const equipmentCount = rules.equipmentIds?.length ?? 0;
         // Bound joint enumeration by counting ordered teams and possible assignments.
         let estimate = 0, combinations = 1;
         for (let size = 1; size <= maxSlots && estimate <= 15000; size++) {
-            combinations *= (chefs.length - size + 1) * (stockSize + 1);
+            combinations *= (chefs.length - size + 1) * (equipmentCount + 1);
             estimate += combinations;
         }
-        const exactEquipment = automatic && (!stockSize || estimate <= 15000);
+        const exactEquipment = automatic && (!equipmentCount || estimate <= 15000);
         const equipment = automatic ? createEquipmentSearch(evaluator, rules, exactEquipment, deadline) : null;
         const shortlist = [];
         const refined = new Set();

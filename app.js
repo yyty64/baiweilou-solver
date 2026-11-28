@@ -22,7 +22,7 @@ let chefNames = new Map();
 let recipesByName = new Map();
 let equipmentOptions = new Map();
 let ownedChefsByName = new Map();
-let equipmentOverrides = new Map();
+const equipmentOverrides = new Map();
 let openPicker;
 let pickerCount = 0;
 let worker;
@@ -232,10 +232,6 @@ function equippedId(chef, overrides) {
     return overrides.has(chef.chefId) ? overrides.get(chef.chefId) : chef.equip;
 }
 
-function equipmentLabel(id) {
-    return id ? equipmentOptions.get(id)?.label ?? `图鉴未收录 #${id}` : "";
-}
-
 function createPicker(root, { label, kind, getOptions, initialId = null, allowedIds, onChange }) {
     const equipment = kind === "厨具";
     const panelId = `picker-${++pickerCount}`;
@@ -398,48 +394,27 @@ function createPicker(root, { label, kind, getOptions, initialId = null, allowed
     };
 }
 
-function catalogEquipmentStock() {
-    const stock = new Map(archive.equipmentStock);
-    for (const id of equipmentOptions.keys()) if (!stock.has(id)) stock.set(id, 1);
-    return stock;
-}
-
 function boundEquipmentOnly() {
     return $("equipment-source").value === "bound";
 }
 
-function matchingEquipmentStock() {
-    return boundEquipmentOnly() ? new Map(archive.equipmentStock) : catalogEquipmentStock();
-}
-
-function activeEquipmentLocks(stock) {
+function activeEquipmentLocks() {
     if (!boundEquipmentOnly()) return equipmentOverrides;
-    return new Map([...equipmentOverrides].filter(([, id]) => id === null || stock.has(id)));
-}
-
-function validateEquipment(assignments, stock) {
-    const counts = new Map();
-    for (const id of assignments.values()) {
-        if (!stock.has(id)) continue;
-        const count = (counts.get(id) ?? 0) + 1;
-        if (count > stock.get(id)) throw new Error(`「${equipmentLabel(id)}」可用 ${stock.get(id)} 件，请调整搭配。`);
-        counts.set(id, count);
-    }
+    return new Map([...equipmentOverrides].filter(([, id]) => id === null || archive?.boundEquipmentIds.has(id)));
 }
 
 function refreshEquipmentEditor() {
     const matching = $("use-equipment").checked;
     $("equipment-source-field").hidden = !matching;
     $("equipment-editor").hidden = !matching || !archive?.chefs.length;
-    const boundStock = new Map(archive?.equipmentStock);
     const info = $("equipment-source-info");
     info.hidden = !matching || !boundEquipmentOnly() || !archive;
     if (!info.hidden) {
-        const count = [...boundStock.values()].reduce((sum, quantity) => sum + quantity, 0);
-        info.textContent = count ? `可调配 ${numberFormat.format(count)} 件，包括未上阵厨师已绑定的厨具。`
+        const count = archive.boundEquipmentIds.size;
+        info.textContent = count ? `可搭配 ${numberFormat.format(count)} 种，包括未上阵厨师已绑定的厨具。`
             : "档案中没有可调配的已绑定厨具。";
     }
-    const locks = activeEquipmentLocks(boundStock);
+    const locks = activeEquipmentLocks();
     const name = $("equipment-chef").value.trim();
     const chef = ownedChefsByName.get(name);
     equipmentItem.disabled = !chef;
@@ -489,8 +464,8 @@ function readRules() {
         targetMode: $("target-mode").value, searchMs: time === "complete" ? Infinity : Number(time),
     };
     if (!$("use-equipment").checked) return rules;
-    const stock = matchingEquipmentStock();
-    return { ...rules, equipmentStock: [...stock], equipmentLocks: [...activeEquipmentLocks(stock)] };
+    const equipmentIds = boundEquipmentOnly() ? archive.boundEquipmentIds : equipmentOptions.keys();
+    return { ...rules, equipmentIds: [...equipmentIds], equipmentLocks: [...activeEquipmentLocks()] };
 }
 
 function chefPickerEntry(chef, rarity, trained) {
@@ -578,7 +553,6 @@ function renderLineup(best, stage, rules, originalScore) {
         try {
             const equipment = new Map(fields.map(({ chefPicker, gearPicker }) => [chefPicker.value, gearPicker.value]));
             if (equipment.size !== fields.length) throw new Error("同一位厨师只能上阵一次，请检查阵容。");
-            validateEquipment(equipment, catalogEquipmentStock());
             const adjusted = score([...equipment].map(([chefId, equipId]) => withEquipment(byId.get(chefId), equipId)));
             renderResult({ best: adjusted }, stage, rules, originalScore);
         } catch (error) {
@@ -671,7 +645,7 @@ function runSolver() {
         const rules = readRules();
         $("result").replaceChildren();
         $("solve").textContent = "停止搜索";
-        status("solver-status", rules.equipmentStock ? "正在搜索阵容和厨具搭配…" : "正在按档案装备搜索阵容…");
+        status("solver-status", rules.equipmentIds ? "正在搜索阵容和厨具搭配…" : "正在按档案装备搜索阵容…");
         if (location.protocol === "file:") {
             offlineRun = setTimeout(() => {
                 updateResultState();
@@ -683,10 +657,10 @@ function runSolver() {
             }, 35);
             return;
         }
-        worker = new Worker("./worker.js");
+        worker = new Worker("./worker.js?v=2");
         worker.onmessage = ({ data }) => {
             if (data.evaluated) {
-                const gear = rules.equipmentStock ? "，正在搜索厨具搭配" : "";
+                const gear = rules.equipmentIds ? "，正在搜索厨具搭配" : "";
                 status("solver-status", `已计算 ${numberFormat.format(data.evaluated)} 组阵容${gear}…`);
                 return;
             }
@@ -752,7 +726,7 @@ const equipmentItem = createPicker($("equipment-item"), {
     label: "厨具",
     kind: "厨具",
     getOptions: () => equipmentOptions,
-    allowedIds: () => boundEquipmentOnly() ? new Map(archive?.equipmentStock) : null,
+    allowedIds: () => boundEquipmentOnly() ? archive?.boundEquipmentIds : null,
 });
 equipmentItem.disabled = true;
 function closePickerOutside(event) {
@@ -776,11 +750,10 @@ $("equipment-form").addEventListener("submit", (event) => {
     if (!chef || !$("use-equipment").checked) return;
     try {
         const id = equipmentItem.value;
-        const stock = matchingEquipmentStock();
-        if (boundEquipmentOnly() && id !== null && !stock.has(id)) throw new Error("请从当前范围内选择厨具，或清空厨具。");
-        const locks = new Map(equipmentOverrides).set(chef.chefId, id);
-        validateEquipment(locks, stock);
-        equipmentOverrides = locks;
+        if (boundEquipmentOnly() && id !== null && !archive.boundEquipmentIds.has(id)) {
+            throw new Error("请从当前范围内选择厨具，或清空厨具。");
+        }
+        equipmentOverrides.set(chef.chefId, id);
         refreshEquipmentEditor();
         updateResultState();
         status("equipment-status", `已固定「${chefNames.get(chef.chefId)}」的厨具配置`);

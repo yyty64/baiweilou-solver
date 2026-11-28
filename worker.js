@@ -1,6 +1,6 @@
 "use strict";
 
-importScripts("./engine.js");
+importScripts("./engine.js?v=2");
 
 self.onmessage = ({ data }) => {
     try {

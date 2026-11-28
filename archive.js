@@ -43,10 +43,7 @@
             chefs.set(chefId, { chefId, ultimate: hasStatus(row.ult), equip, diskLevel: idOf(row.dlv), ambers });
         }
 
-        const equipmentStock = new Map();
-        for (const id of equipped.values()) {
-            if (equipIds.has(id)) equipmentStock.set(id, (equipmentStock.get(id) ?? 0) + 1);
-        }
+        const boundEquipmentIds = new Set([...equipped.values()].filter((id) => equipIds.has(id)));
         const specializedRecipes = new Set();
         for (const recipe of Array.isArray(data.recipes) ? data.recipes : []) {
             const id = idOf(recipe?.id);
@@ -54,7 +51,7 @@
         }
         return {
             chefs: [...chefs.values()],
-            equipmentStock: [...equipmentStock],
+            boundEquipmentIds,
             specializedRecipes,
             unknown: Object.fromEntries(Object.entries(unknown).map(([key, ids]) => [key, [...ids]])),
         };
