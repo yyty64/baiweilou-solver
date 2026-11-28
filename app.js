@@ -493,14 +493,15 @@ function readRules() {
     return { ...rules, equipmentStock: [...stock], equipmentLocks: [...activeEquipmentLocks(stock)] };
 }
 
-function chefPickerEntry(chef, trained) {
+function chefPickerEntry(chef, rarity, trained) {
     const skillText = (effects) => [...new Set(effects.map(({ label }) => label))].join(" · ");
     const techniques = chef.base.map((value, index) => `${techniqueLabels[index]} ${numberFormat.format(value)}`);
     const skill = skillText(chef.innate);
     const training = skillText(chef.ultimate);
     const suit = skillText(chef.suit);
+    const baseTechniques = `基础技法 ${techniques.join(" · ")}`;
     return pickerEntry(chef.name, [
-        `基础技法 ${techniques.join(" · ")}`,
+        rarity ? `${rarity} 星 · ${baseTechniques}` : baseTechniques,
         skill && `技能 ${skill}`,
         trained ? ["已修炼", training].filter(Boolean).join(" · ") : "修炼未完成",
         chef.jadeNames.length && `遗玉 ${chef.jadeNames.join(" · ")}`,
@@ -512,8 +513,11 @@ function renderLineup(best, stage, rules, originalScore) {
     const { chefs, score, withEquipment } = BaiweiEngine.createEvaluator(catalog, archive, stage, rules);
     const byId = new Map(chefs.map((chef) => [chef.id, chef]));
     const trained = new Set(archive.chefs.filter(({ ultimate }) => ultimate).map(({ chefId }) => chefId));
-    const chefOptions = new Map([...chefs].sort((a, b) => a.name.localeCompare(b.name, "zh-CN"))
-        .map((chef) => [chef.id, chefPickerEntry(chef, trained.has(chef.id))]));
+    const rarityById = new Map(catalog.chefs.map(({ chefId, rarity }) => [chefId, rarity]));
+    const orderedChefs = [...chefs].sort((a, b) => (rarityById.get(b.id) ?? 0) - (rarityById.get(a.id) ?? 0) ||
+        a.name.localeCompare(b.name, "zh-CN"));
+    const chefOptions = new Map(orderedChefs.map((chef) =>
+        [chef.id, chefPickerEntry(chef, rarityById.get(chef.id), trained.has(chef.id))]));
     const team = node("ol", undefined, "result-team");
     const message = node("p", "", "result-note error");
     message.setAttribute("role", "status");
