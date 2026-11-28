@@ -40,6 +40,7 @@ button:disabled { cursor: default; opacity: .58; }
 h1 { font-size: clamp(2.3rem, 5vw, 3.7rem); line-height: 1.2; letter-spacing: .045em; margin: .25rem 0 .65rem; }
 .masthead-inner > p:last-child { color: #e4efe8; }
 main.container { margin-top: 1.5rem; padding-bottom: 2.75rem; }
+.acknowledgments { padding-bottom: 1.5rem; color: #6b7074; font-size: .875rem; text-align: center; }
 .workspace { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); align-items: start; gap: 1rem; }
 .panel { min-width: 0; padding: 1.3rem; background: white; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 3px 12px #143c3310; }
 h2 { margin-bottom: .7rem; font-size: 1.18rem; line-height: 1.35; }
