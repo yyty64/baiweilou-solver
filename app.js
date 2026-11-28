@@ -657,7 +657,7 @@ function runSolver() {
             }, 35);
             return;
         }
-        worker = new Worker("./worker.js?v=3");
+        worker = new Worker("./worker.js?v=4");
         worker.onmessage = ({ data }) => {
             if (data.evaluated) {
                 const gear = rules.equipmentIds ? "，正在搜索厨具搭配" : "";

@@ -7,8 +7,8 @@
   <title>百味楼配队 · 爆炒江湖</title>
   <link rel="stylesheet" href="style.css?v=7">
   <script src="archive.js?v=3" defer></script>
-  <script src="engine.js?v=3" defer></script>
-  <script src="app.js?v=12" defer></script>
+  <script src="engine.js?v=4" defer></script>
+  <script src="app.js?v=13" defer></script>
 </head>
 <body>
   <header class="masthead">
@@ -90,7 +90,7 @@
     </div>
     <details class="panel rules" id="rules">
       <summary>计分参数</summary>
-      <p class="muted">先算基础售价，再叠加售价、金币与品级加成。各菜分数相加后四舍五入。</p>
+      <p class="muted">基础售价向下取整，再叠加售价、金币与品级加成。每道菜的分数向上取整后相加。</p>
       <div class="rule-grid">
         <label>达到目标分时<select id="target-mode"><option value="strict">必须超过目标分</option><option value="inclusive">等于目标分也算过关</option></select></label>
         <label>搜索时限

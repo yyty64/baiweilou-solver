@@ -297,8 +297,8 @@
                 }
                 item.basicFlat = basicFlat;
                 item.basicBonus = basicBonus;
-                const base = (dish.amount + basicFlat) * (1 + basicBonus);
-                item.score = epsilon(base * (1 + item.priceBonus + item.goldBonus + item.gradeBonus));
+                const base = Math.floor(epsilon((dish.amount + basicFlat) * (1 + basicBonus)));
+                item.score = Math.ceil(epsilon(base * (1 + item.priceBonus + item.goldBonus + item.gradeBonus)));
                 totalScore += item.score;
                 return item;
             });
@@ -310,7 +310,7 @@
                 if (chef.unknownJade || (chef.equipId && !equips.has(chef.equipId))) notes.add(`${chef.name}有图鉴未收录的装备`);
             }
             return {
-                score: roundHalfUp(epsilon(totalScore)),
+                score: totalScore,
                 team: team.map(({ id, name, equipId, equipName, jadeNames }) => ({ id, name, equipId, equipName, jadeNames })),
                 skills: cleanTotal, passive, dishes: breakdown, notes: [...notes],
             };
