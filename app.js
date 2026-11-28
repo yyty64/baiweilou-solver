@@ -448,23 +448,18 @@ function readRules() {
 
 function renderLineup(best, stage, rules, originalScore) {
     const team = node("ol", undefined, "result-team");
-    const editable = Boolean(rules.equipmentStock);
     const fields = [];
     for (const chef of best.team) {
         const item = node("li", chef.name);
-        if (!editable && chef.equipId) item.append(node("small", `厨具 ${equipmentLabel(chef.equipId)}`));
         if (chef.jadeNames.length) item.append(node("small", `遗玉 ${chef.jadeNames.join(" · ")}`));
-        if (editable) {
-            const field = node("div", undefined, "result-equipment equipment-field");
-            const root = node("div");
-            const picker = createEquipmentPicker(root, `${chef.name}的厨具`, chef.equipId);
-            field.append(node("span", "厨具"), root);
-            item.append(field);
-            fields.push({ chef, picker });
-        }
+        const field = node("div", undefined, "result-equipment equipment-field");
+        const root = node("div");
+        const picker = createEquipmentPicker(root, `${chef.name}的厨具`, chef.equipId);
+        field.append(node("span", "厨具"), root);
+        item.append(field);
+        fields.push({ chef, picker });
         team.append(item);
     }
-    if (!editable) return team;
 
     const form = node("form");
     const recalculate = node("button", "重算营业金额", "secondary");
@@ -477,7 +472,7 @@ function renderLineup(best, stage, rules, originalScore) {
         event.preventDefault();
         try {
             const equipment = new Map(fields.map(({ chef, picker }) => [chef.id, picker.value]));
-            validateEquipment(equipment, new Map(rules.equipmentStock));
+            validateEquipment(equipment, catalogEquipmentStock());
             const { chefs, score, withEquipment } = BaiweiEngine.createEvaluator(catalog, archive, stage, rules);
             const byId = new Map(chefs.map((chef) => [chef.id, chef]));
             const adjusted = score(best.team.map(({ id }) => withEquipment(byId.get(id), equipment.get(id))));
