@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="按百味楼点单和个人厨师档案计算过关阵容。">
   <title>百味楼配队 · 爆炒江湖</title>
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
   <script src="archive.js?v=2" defer></script>
   <script src="engine.js" defer></script>
-  <script src="app.js?v=7" defer></script>
+  <script src="app.js?v=8" defer></script>
 </head>
 <body>
   <header class="masthead">
@@ -60,7 +60,14 @@
         <button class="file-button" id="open-catalog" type="button" hidden>选择图鉴数据文件</button>
         <input type="file" id="catalog-file" accept=".json,application/json" hidden>
         <label class="check-row"><input id="use-equipment" type="checkbox" aria-describedby="equipment-mode-help" checked>使用厨具</label>
-        <p id="equipment-mode-help" class="muted">勾选后从全图鉴自动试配。取消勾选则按档案中已绑定的厨具计算。两种方式都计入已装备的遗玉。</p>
+        <p id="equipment-mode-help" class="muted">勾选时按所选范围自动搭配。取消勾选时使用每位厨师原本绑定的厨具。两种模式都计入已装备的遗玉。</p>
+        <label class="equipment-source" id="equipment-source-field">自动搭配范围
+          <select id="equipment-source" aria-describedby="equipment-source-info">
+            <option value="bound">已绑定厨具</option>
+            <option value="catalog" selected>全图鉴厨具（模拟）</option>
+          </select>
+        </label>
+        <p class="muted" id="equipment-source-info" role="status" hidden></p>
         <details id="equipment-editor" hidden>
           <summary>固定个别厨师的厨具</summary>
           <p class="muted">该厨师上阵时使用指定厨具，留空可固定为空。</p>
